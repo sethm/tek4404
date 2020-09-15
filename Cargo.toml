@@ -1,0 +1,12 @@
+[package]
+name = "tek4404"
+version = "0.1.0"
+authors = ["Seth Morabito <web@loomcom.com>"]
+edition = "2018"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[build-dependencies]
+cc = "1.0"
+
+[dependencies]
