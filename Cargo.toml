@@ -10,3 +10,4 @@ edition = "2018"
 cc = "1.0"
 
 [dependencies]
+byteorder = "1.3.4"

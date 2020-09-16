@@ -1,4 +1,6 @@
+mod bus;
 mod cpu;
+mod mem;
 
 const CYCLES: u32 = 80;
 
