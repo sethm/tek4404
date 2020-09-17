@@ -6,9 +6,15 @@ use crate::bus::IoDevice;
 use crate::bus::BusError;
 use byteorder::{ByteOrder, BigEndian};
 
+const SYSMEM_END: usize = 0xfffff;
+
+const RAM_SIZE: usize = 0x100000;
+const ROM_SIZE: usize = 0x10000;
+
 #[allow(dead_code)]
 struct Memory {
     virt: bool,
+    reset: bool,
     bootrom: Vec<u8>,
     debugrom: Vec<u8>,
     display: Vec<u8>,
@@ -21,12 +27,21 @@ impl Memory {
     fn new() -> Memory {
         Memory {
             virt: false,
-            bootrom: vec![0; 0x10000],
-            debugrom: vec![0; 0x10000],
-            display: vec![0; 0x100000],
-            sysmem: vec![0; 0x100000],
-            expmem: vec![0; 0x100000],
+            reset: false,
+            bootrom: vec![0; ROM_SIZE],
+            debugrom: vec![0; ROM_SIZE],
+            display: vec![0; RAM_SIZE],
+            sysmem: vec![0; RAM_SIZE],
+            expmem: vec![0; RAM_SIZE],
         }
+    }
+
+    fn is_sysmem(address: usize) -> bool {
+        address <= SYSMEM_END
+    }
+
+    fn load_rom(&mut self, _: &str) -> Result<(), BusError> {
+        todo!()
     }
 }
 
@@ -36,7 +51,7 @@ impl IoDevice for Memory {
     fn read_8(&self, address: usize) -> std::result::Result<u8, BusError> {
         // Physical Access
         match address {
-            0..=0xfffff => Ok(self.sysmem[address]),
+            a if Memory::is_sysmem(a) => Ok(self.sysmem[address]),
             _ => Err(BusError::Access)
         }
         
@@ -49,7 +64,7 @@ impl IoDevice for Memory {
         }
         
         match address {
-            0..=0xfffff => {
+            a if Memory::is_sysmem(a) => {
                 let buf = &self.sysmem[address..=address+1];
                 Ok(BigEndian::read_u16(buf))
             },
@@ -64,7 +79,7 @@ impl IoDevice for Memory {
         }
 
         match address {
-            0..=0xfffff => {
+            a if Memory::is_sysmem(a) => {
                 let buf = &self.sysmem[address..=address+3];
                 Ok(BigEndian::read_u32(buf))
             },
@@ -72,16 +87,42 @@ impl IoDevice for Memory {
         }
     }
 
-    fn write_8(&mut self, _: usize, _: u8) -> Result<(), BusError> {
-        todo!()
+    fn write_8(&mut self, address: usize, value: u8) -> Result<(), BusError> {
+        match address {
+            a if Memory::is_sysmem(a) => {
+                self.sysmem[address] = value;
+                Ok(())
+            },
+            _ => Err(BusError::Access)
+        }
     }
 
-    fn write_16(&mut self, _: usize, _: u16) -> Result<(), BusError> {
-        todo!()
+    fn write_16(&mut self, address: usize, value: u16) -> Result<(), BusError> {
+        if address & 1 != 0 {
+            return Err(BusError::Alignment);
+        }
+        
+        match address {
+            a if Memory::is_sysmem(a) => {
+                let buf = &mut self.sysmem[address..=address+1];
+                Ok(BigEndian::write_u16(buf, value))
+            },
+            _ => Err(BusError::Access)
+        }
     }
 
-    fn write_32(&mut self, _: usize, _: u32) -> Result<(), BusError> {
-        todo!()
+    fn write_32(&mut self, address: usize, value: u32) -> Result<(), BusError> {
+        if address & 3 != 0 {
+            return Err(BusError::Alignment);
+        }
+        
+        match address {
+            a if Memory::is_sysmem(a) => {
+                let buf = &mut self.sysmem[address..=address+3];
+                Ok(BigEndian::write_u32(buf, value))
+            },
+            _ => Err(BusError::Access)
+        }
     }
 }
 
@@ -89,8 +130,49 @@ impl IoDevice for Memory {
 mod tests {
     use super::*;
 
+    macro_rules! assert_r_alignment_err {
+        ($mem:ident, $fn:ident, $addr:expr) => ({
+            match $mem.$fn($addr) {
+                Ok(_) => panic!("Alignment Error expected"),
+                Err(BusError::Access) => panic!("Access Error not expected"),
+                Err(BusError::Alignment) => {}
+            }
+        })
+    }
+
+    macro_rules! assert_r_access_err {
+        ($mem:ident, $fn:ident, $addr:expr) => ({
+            match $mem.$fn($addr) {
+                Ok(_) => panic!("Access Error expected"),
+                Err(BusError::Access) => {},
+                Err(BusError::Alignment) => panic!("Alignment Error not expected"),
+            }
+        })
+    }
+
+    macro_rules! assert_w_alignment_err {
+        ($mem:ident, $fn:ident, $addr:expr, $val:expr) => ({
+            match $mem.$fn($addr, $val) {
+                Ok(_) => panic!("Alignment Error expected"),
+                Err(BusError::Access) => panic!("Access Error not expected"),
+                Err(BusError::Alignment) => {}
+            }
+        })
+    }
+    
+    macro_rules! assert_w_access_err {
+        ($mem:ident, $fn:ident, $addr:expr, $val:expr) => ({
+            match $mem.$fn($addr, $val) {
+                Ok(_) => panic!("Access Error expected"),
+                Err(BusError::Access) => {},
+                Err(BusError::Alignment) => panic!("Alignment Error not expected"),
+            }
+        })
+    }
+
+    
     #[test]
-    fn test_read8() -> Result<(), String> {
+    fn test_read8() {
         let mut mem = Memory::new();
 
         mem.sysmem[0x100] = 0x01;
@@ -103,14 +185,11 @@ mod tests {
         assert_eq!(0x03, mem.read_8(0x102).unwrap());
         assert_eq!(0x04, mem.read_8(0x103).unwrap());
 
-        match mem.read_8(0x100001) {
-            Ok(_) => Err(String::from("Should not have been able to read past end of memory")),
-            Err(_) => Ok(())
-        }
+        assert_r_access_err!(mem, read_8, 0x100000);
     }
 
     #[test]
-    fn test_read16() -> Result<(), String> {
+    fn test_read16() {
         let mut mem = Memory::new();
 
         mem.sysmem[0x100] = 0x01;
@@ -121,26 +200,14 @@ mod tests {
         assert_eq!(0x0102, mem.read_16(0x100).unwrap());
         assert_eq!(0x0304, mem.read_16(0x102).unwrap());
 
-        match mem.read_16(0x101) {
-            Ok(_) => return Err(String::from("Should have been alignment error")),
-            Err(BusError::Access) => return Err(String::from("Should not have been access error")),
-            _ => {}
-        }
+        assert_r_alignment_err!(mem, read_16, 0x101);
+        assert_r_alignment_err!(mem, read_16, 0x103);
 
-        match mem.read_16(0x103) {
-            Ok(_) => return Err(String::from("Should have been alignment error")),
-            Err(BusError::Access) => return Err(String::from("Should not have been access error")),
-            _ => {}
-        }
-        
-        match mem.read_16(0x100002) {
-            Ok(_) => Err(String::from("Should not have been able to read past end of memory")),
-            Err(_) => Ok(())
-        }
+        assert_r_access_err!(mem, read_16, 0x100000);
     }
 
     #[test]
-    fn test_read32() -> Result<(), String> {
+    fn test_read32() {
         let mut mem = Memory::new();
 
         mem.sysmem[0x100] = 0x01;
@@ -149,32 +216,54 @@ mod tests {
         mem.sysmem[0x103] = 0x04;
 
         assert_eq!(0x01020304, mem.read_32(0x100).unwrap());
-        assert_eq!(0, mem.read_32(0x104).unwrap());
 
-        match mem.read_32(0x101) {
-            Ok(_) => return Err(String::from("Should have been alignment error")),
-            Err(BusError::Access) => return Err(String::from("Should not have been access error")),
-            _ => {}
-        }
+        assert_r_alignment_err!(mem, read_32, 0x101);
+        assert_r_alignment_err!(mem, read_32, 0x102);
+        assert_r_alignment_err!(mem, read_32, 0x103);
 
-        match mem.read_32(0x102) {
-            Ok(_) => return Err(String::from("Should have been alignment error")),
-            Err(BusError::Access) => return Err(String::from("Should not have been access error")),
-            _ => {}
-        }
+        assert_r_access_err!(mem, read_32, 0x100004);
+    }
 
-        match mem.read_32(0x103) {
-            Ok(_) => return Err(String::from("Should have been alignment error")),
-            Err(BusError::Access) => return Err(String::from("Should not have been access error")),
-            _ => {}
-        }
+    #[test]
+    fn test_write_8() {
+        let mut mem = Memory::new();
 
-        match mem.read_32(0x100004) {
-            Ok(_) => return Err(String::from("Should not have been able to read past end of memory")),
-            Err(BusError::Alignment) => return Err(String::from("Should not have been alignment error")),
-            _ => {}
-        }
+        let _ = mem.write_8(0x100, 0x5a);
+        assert_eq!(0x5a, mem.sysmem[0x100]);
 
-        Ok(())
+        assert_w_access_err!(mem, write_8, 0x1000000, 0x5a);
+    }
+
+    #[test]
+    fn test_write_16() {
+        let mut mem = Memory::new();
+
+        let _ = mem.write_16(0x100, 0x0102);
+        assert_eq!(0x01, mem.sysmem[0x100]);
+        assert_eq!(0x02, mem.sysmem[0x101]);
+
+        assert_w_alignment_err!(mem, write_16, 0x101, 0x0102);
+        assert_w_alignment_err!(mem, write_16, 0x103, 0x0102);
+        
+        assert_w_access_err!(mem, write_16, 0x100000, 0x0102);
+    }
+
+    #[test]
+    fn test_write_32() {
+        let mut mem = Memory::new();
+
+        let _ = mem.write_32(0x100, 0x01020304);
+        assert_eq!(0x01, mem.sysmem[0x100]);
+        assert_eq!(0x02, mem.sysmem[0x101]);
+        assert_eq!(0x03, mem.sysmem[0x102]);
+        assert_eq!(0x04, mem.sysmem[0x103]);
+
+        assert_w_alignment_err!(mem, write_32, 0x101, 0x01020304);
+        assert_w_alignment_err!(mem, write_32, 0x102, 0x01020304);
+        assert_w_alignment_err!(mem, write_32, 0x103, 0x01020304);
+
+        assert_w_access_err!(mem, write_32, 0x100000, 0x01020304);
+        
     }
 }
+        
