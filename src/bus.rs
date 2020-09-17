@@ -1,46 +1,10 @@
 ///
 /// Tektronix 4404 Bus Implementation
 ///
-use std::error::Error;
-use std::fmt;
+
+use crate::err::*;
+
 use std::os::raw::c_uint;
-
-#[allow(dead_code)]
-pub enum BusError {
-    Access,
-    Alignment,
-}
-
-impl fmt::Debug for BusError {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        match *self {
-            BusError::Access => write!(f, "Access Error"),
-            BusError::Alignment => write!(f, "Alignment Error"),
-        }
-    }
-}
-
-impl fmt::Display for BusError {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        match *self {
-            BusError::Access => write!(f, "Access Error"),
-            BusError::Alignment => write!(f, "Alignment Error"),
-        }
-    }
-}
-
-impl Error for BusError {
-    fn description(&self) -> &str {
-        match *self {
-            BusError::Access => "Access Error",
-            BusError::Alignment => "Alignment Error",
-        }
-    }
-
-    fn cause(&self) -> Option<&dyn Error> {
-        None
-    }
-}
 
 pub trait IoDevice {
     fn read_8(self: &Self, address: usize) -> Result<u8, BusError>;

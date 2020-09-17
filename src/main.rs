@@ -1,3 +1,4 @@
+mod err;
 mod bus;
 mod cpu;
 mod mem;
