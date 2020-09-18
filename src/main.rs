@@ -3,12 +3,18 @@ mod bus;
 mod cpu;
 mod mem;
 
-const CYCLES: u32 = 80;
+#[macro_use]
+extern crate lazy_static;
+
+const CYCLES: u32 = 180;
 
 fn main() {
-    println!("[  MAIN] Resetting CPU...");
+    println!("[   MAIN] Tektronix 4404 Starting...");
+    println!("[   MAIN] Resetting CPU...");
+    bus::reset();
     cpu::init();
-    println!("[  MAIN] EXECUTING...");
-    let cycles_done = cpu::execute(CYCLES);
-    println!("[  MAIN] Execution consumed {} cycles.", cycles_done);
+    cpu::reset();
+    println!("[   MAIN] EXECUTING...");
+    let cyc = cpu::execute(CYCLES);
+    println!("[   MAIN] {} CYCLES COMPLETED.", cyc);
 }
