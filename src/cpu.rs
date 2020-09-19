@@ -55,6 +55,6 @@ extern "C" fn instruction_hook(pc: c_uint) {
         m68k_disassemble(asm_buf, pc, M68K_CPU_TYPE_68010);
         let s = CString::from_raw(asm_buf).into_string().unwrap();
 
-        println!("[    CPU] {:08x}: \t\t{}", pc, s);
+        debug!("{:08x}: \t\t{}", pc, s);
     }
 }

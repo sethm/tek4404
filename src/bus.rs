@@ -80,7 +80,7 @@ impl Bus {
 
     fn load_rom(&mut self) {
         let rom_data = std::fs::read("./rom/boot.bin").unwrap();
-        println!("[    BUS] Loaded {} bytes from ./rom/boot.bin", rom_data.len());
+        trace!("Loaded {} bytes from ./rom/boot.bin", rom_data.len());
         self.rom.lock().unwrap().load(rom_data);
     }
 
@@ -149,6 +149,7 @@ pub fn m68k_read_disassembler_32(address: c_uint) -> c_uint {
 pub fn m68k_read_memory_8(address: c_uint) -> c_uint {
     match BUS.lock().unwrap().read_8(address as usize) {
         Ok(byte) => {
+            trace!("Read BYTE {:08x} = {:04x}", address, byte);
             byte as c_uint
         },
         Err(_) => {
@@ -162,6 +163,7 @@ pub fn m68k_read_memory_8(address: c_uint) -> c_uint {
 pub fn m68k_read_memory_16(address: c_uint) -> c_uint {
     match BUS.lock().unwrap().read_16(address as usize) {
         Ok(word) => {
+            trace!("Read WORD {:08x} = {:04x}", address, word);
             word as c_uint
         },
         Err(_) => {
@@ -175,6 +177,7 @@ pub fn m68k_read_memory_16(address: c_uint) -> c_uint {
 pub fn m68k_read_memory_32(address: c_uint) -> c_uint {
     match BUS.lock().unwrap().read_32(address as usize) {
         Ok(long) => {
+            trace!("Read LONG {:08x} = {:08x}", address, long);
             long as c_uint
         },
         Err(_) => {
@@ -186,15 +189,15 @@ pub fn m68k_read_memory_32(address: c_uint) -> c_uint {
 
 #[no_mangle]
 pub fn m68k_write_memory_8(addr: c_uint, val: c_uint) {
-    println!("[    BUS] Write {:08x} = {:02x}", addr, val);
+    trace!("Write BYTE {:08x} = {:02x}", addr, val);
 }
 
 #[no_mangle]
 pub fn m68k_write_memory_16(addr: c_uint, val: c_uint) {
-    println!("[    BUS] Write {:08x} = {:02x}", addr, val);
+    trace!("Write WORD {:08x} = {:04x}", addr, val);
 }
 
 #[no_mangle]
 pub fn m68k_write_memory_32(addr: c_uint, val: c_uint) {
-    println!("[    BUS] Write {:08x} = {:02x}", addr, val);
+    trace!("Write LONG {:08x} = {:08x}", addr, val);
 }
