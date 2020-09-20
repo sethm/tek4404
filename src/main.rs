@@ -56,7 +56,7 @@ fn main() {
 
     info!("INITIALIZING");
     match bus::load_rom(opts.bootrom.as_str()) {
-        Ok(()) => {   
+        Ok(()) => {
             cpu::init();
             cpu::reset();
             info!("BOOTING");

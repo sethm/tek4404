@@ -41,28 +41,23 @@ pub const SOUND_END: usize = 0x788fff;
 pub const ACIA_START: usize = 0x78c000;
 pub const ACIA_END: usize = 0x78c007;
 
+// The existence of this global, mutable shared state is unfortunately
+// made necessary by the nature of the C Musashi 68K core library.
+// There must be a global bus available for the extern C functions
+// that are used to read and write to the bus. In order to prevent
+// deadlocks, however, *only* the extern C functions and a few select
+// helper functions are allowed to lock the bus mutex!
 lazy_static! {
-    pub static ref REGISTERS: Mutex<Registers> = Mutex::new(Registers::new());
     pub static ref BUS: Mutex<Bus> = Mutex::new(Bus::new());
 }
 
-pub type BusDevice = Arc<RwLock<dyn IoDevice + Send + Sync>>;
-
-#[derive(Debug)]
-pub struct Registers {
-    pub reset: bool,
-}
+pub type BusDevice = Option<Arc<RwLock<dyn IoDevice + Send + Sync>>>;
 
 pub struct Bus {
+    pub map_rom: bool,
     rom: BusDevice,
     ram: BusDevice,
     sound: BusDevice,
-}
-
-impl Registers {
-    fn new() -> Self {
-        Registers { reset: true }
-    }
 }
 
 pub fn load_rom(boot_rom: &str) -> Result<(), SimError> {
@@ -72,34 +67,28 @@ pub fn load_rom(boot_rom: &str) -> Result<(), SimError> {
 impl Bus {
     pub fn new() -> Bus {
         Bus {
-            rom: Arc::new(RwLock::new(
+            map_rom: true,
+            rom: Some(Arc::new(RwLock::new(
                 Memory::new(ROM_START, ROM_END_PHYSICAL, true).expect("Unable to init ROM"),
-            )),
-            ram: Arc::new(RwLock::new(
+            ))),
+            ram: Some(Arc::new(RwLock::new(
                 Memory::new(RAM_START, RAM_END, false).expect("Unable to init RAM"),
-            )),
-            sound: Arc::new(RwLock::new(Sound {})),
+            ))),
+            sound: Some(Arc::new(RwLock::new(Sound {}))),
         }
     }
 
-    fn get_device(&mut self, address: usize) -> Result<BusDevice, BusError> {
-        let mut reg_mutex = REGISTERS.lock().unwrap();
+    fn get_device(&self, address: usize) -> Result<&BusDevice, BusError> {
         match address {
-            ROM_START..=ROM_END_VIRTUAL => Ok(Arc::clone(&self.rom)),
+            ROM_START..=ROM_END_VIRTUAL => Ok(&self.rom),
             RAM_START..=RAM_END => {
-                if reg_mutex.reset {
-                    Ok(Arc::clone(&self.rom))
+                if self.map_rom {
+                    Ok(&self.rom)
                 } else {
-                    Ok(Arc::clone(&self.ram))
+                    Ok(&self.ram)
                 }
             }
-            SOUND_START..=SOUND_END => {
-                if reg_mutex.reset {
-                    info!("Bus Reset flip-flop cleared. ROM now mapped");
-                    reg_mutex.reset = false;
-                }
-                Ok(Arc::clone(&self.sound))
-            }
+            SOUND_START..=SOUND_END => Ok(&self.sound),
             ACIA_START..=ACIA_END => {
                 todo!("ACIA at {:08x}-{:08x}", ACIA_START, ACIA_END);
             }
@@ -113,61 +102,95 @@ impl Bus {
     fn load_rom(&mut self, rom_file: &str) -> Result<(), SimError> {
         let result = std::fs::read(rom_file);
         match result {
-            Ok(data) => {
-                self.rom.write().unwrap().load(&data);
-                info!("Loaded {} bytes from {}", &data.len(), rom_file);
-                Ok(())
-            }
+            Ok(data) => match &self.rom {
+                Some(dev) => {
+                    info!("Loaded {} bytes from {}", &data.len(), rom_file);
+                    Ok(dev.write().unwrap().load(&data))
+                }
+                None => Err(SimError::Init(String::from("Could not load ROM file."))),
+            },
             Err(_) => Err(SimError::Init(String::from("Could not load ROM file."))),
         }
     }
 
     fn read_8(&mut self, address: usize) -> Result<u8, BusError> {
-        let mutex = self.get_device(address)?;
-        let mut dev = mutex.write().unwrap();
-        dev.read_8(address)
+        let dev = self.get_device(address)?.clone();
+        match dev {
+            Some(dev) => {
+                let mut d = dev.write().unwrap();
+                d.read_8(self, address)
+            }
+            None => Err(BusError::Access),
+        }
     }
 
     fn read_16(&mut self, address: usize) -> Result<u16, BusError> {
-        let mutex = self.get_device(address)?;
-        let mut dev = mutex.write().unwrap();
-        dev.read_16(address)
+        let dev = self.get_device(address)?.clone();
+        match dev {
+            Some(dev) => {
+                let mut d = dev.write().unwrap();
+                d.read_16(self, address)
+            }
+            None => Err(BusError::Access),
+        }
     }
 
     fn read_32(&mut self, address: usize) -> Result<u32, BusError> {
-        let mutex = self.get_device(address)?;
-        let mut dev = mutex.write().unwrap();
-        dev.read_32(address)
+        let dev = self.get_device(address)?.clone();
+        match dev {
+            Some(dev) => {
+                let mut d = dev.write().unwrap();
+                d.read_32(self, address)
+            }
+            None => Err(BusError::Access),
+        }
     }
 
     fn write_8(&mut self, address: usize, value: u8) -> Result<(), BusError> {
-        let mutex = self.get_device(address)?;
-        let mut dev = mutex.write().unwrap();
-        dev.write_8(address, value)
+        let dev = self.get_device(address)?.clone();
+        match dev {
+            Some(dev) => {
+                let mut d = dev.write().unwrap();
+                d.write_8(self, address, value)
+            }
+            None => Err(BusError::Access),
+        }
     }
 
     fn write_16(&mut self, address: usize, value: u16) -> Result<(), BusError> {
-        let mutex = self.get_device(address)?;
-        let mut dev = mutex.write().unwrap();
-        dev.write_16(address, value)
+        let dev = self.get_device(address)?.clone();
+        match dev {
+            Some(dev) => {
+                let mut d = dev.write().unwrap();
+                d.write_16(self, address, value)
+            }
+            None => Err(BusError::Access),
+        }
     }
 
     fn write_32(&mut self, address: usize, value: u32) -> Result<(), BusError> {
-        let mutex = self.get_device(address)?;
-        let mut dev = mutex.write().unwrap();
-        dev.write_32(address, value)
+        let dev = self.get_device(address)?.clone();
+        match dev {
+            Some(dev) => {
+                let mut d = dev.write().unwrap();
+                d.write_32(self, address, value)
+            }
+            None => Err(BusError::Access),
+        }
     }
 }
 
 pub trait IoDevice {
     fn load(self: &mut Self, data: &Vec<u8>);
     fn range(self: &Self) -> RangeInclusive<usize>;
-    fn read_8(self: &mut Self, address: usize) -> Result<u8, BusError>;
-    fn read_16(self: &mut Self, address: usize) -> Result<u16, BusError>;
-    fn read_32(self: &mut Self, address: usize) -> Result<u32, BusError>;
-    fn write_8(self: &mut Self, address: usize, value: u8) -> Result<(), BusError>;
-    fn write_16(self: &mut Self, address: usize, value: u16) -> Result<(), BusError>;
-    fn write_32(self: &mut Self, address: usize, value: u32) -> Result<(), BusError>;
+    fn read_8(self: &mut Self, bus: &mut Bus, address: usize) -> Result<u8, BusError>;
+    fn read_16(self: &mut Self, bus: &mut Bus, address: usize) -> Result<u16, BusError>;
+    fn read_32(self: &mut Self, bus: &mut Bus, address: usize) -> Result<u32, BusError>;
+    fn write_8(self: &mut Self, bus: &mut Bus, address: usize, value: u8) -> Result<(), BusError>;
+    fn write_16(self: &mut Self, bus: &mut Bus, address: usize, value: u16)
+        -> Result<(), BusError>;
+    fn write_32(self: &mut Self, bus: &mut Bus, address: usize, value: u32)
+        -> Result<(), BusError>;
 }
 
 #[no_mangle]
@@ -281,8 +304,8 @@ mod tests {
     where
         T: FnOnce(&mut Bus) -> () + panic::UnwindSafe,
     {
-        crate::bus::REGISTERS.lock().unwrap().reset = false;
         let mut bus = Bus::new();
+        bus.map_rom = false;
 
         test(&mut bus);
     }

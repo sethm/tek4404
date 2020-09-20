@@ -53,8 +53,8 @@ impl Memory {
         })
     }
 
-    fn get_offset(&self, address: usize) -> Result<usize, BusError> {
-        if REGISTERS.lock().unwrap().reset {
+    fn get_offset(&self, bus: &mut Bus, address: usize) -> Result<usize, BusError> {
+        if bus.map_rom {
             Ok(address % RANGE_MIRROR)
         } else if self.range().contains(&address) {
             Ok(address - self.start_address)
@@ -69,13 +69,13 @@ impl IoDevice for Memory {
         self.start_address..=self.end_address
     }
 
-    fn read_8(&mut self, address: usize) -> std::result::Result<u8, BusError> {
-        let offset = self.get_offset(address)?;
+    fn read_8(&mut self, bus: &mut Bus, address: usize) -> std::result::Result<u8, BusError> {
+        let offset = self.get_offset(bus, address)?;
         Ok(self.mem[offset])
     }
 
-    fn read_16(&mut self, address: usize) -> std::result::Result<u16, BusError> {
-        let offset = self.get_offset(address)?;
+    fn read_16(&mut self, bus: &mut Bus, address: usize) -> std::result::Result<u16, BusError> {
+        let offset = self.get_offset(bus, address)?;
         if offset & 1 != 0 {
             Err(BusError::Alignment)
         } else {
@@ -84,8 +84,8 @@ impl IoDevice for Memory {
         }
     }
 
-    fn read_32(&mut self, address: usize) -> std::result::Result<u32, BusError> {
-        let offset = self.get_offset(address)?;
+    fn read_32(&mut self, bus: &mut Bus, address: usize) -> std::result::Result<u32, BusError> {
+        let offset = self.get_offset(bus, address)?;
         if offset & 1 != 0 {
             Err(BusError::Alignment)
         } else {
@@ -94,8 +94,8 @@ impl IoDevice for Memory {
         }
     }
 
-    fn write_8(&mut self, address: usize, value: u8) -> Result<(), BusError> {
-        let offset = self.get_offset(address)?;
+    fn write_8(&mut self, bus: &mut Bus, address: usize, value: u8) -> Result<(), BusError> {
+        let offset = self.get_offset(bus, address)?;
         if self.read_only {
             Err(BusError::ReadOnly)
         } else {
@@ -104,8 +104,8 @@ impl IoDevice for Memory {
         }
     }
 
-    fn write_16(&mut self, address: usize, value: u16) -> Result<(), BusError> {
-        let offset = self.get_offset(address)?;
+    fn write_16(&mut self, bus: &mut Bus, address: usize, value: u16) -> Result<(), BusError> {
+        let offset = self.get_offset(bus, address)?;
         if offset & 1 != 0 {
             Err(BusError::Alignment)
         } else {
@@ -118,8 +118,8 @@ impl IoDevice for Memory {
         }
     }
 
-    fn write_32(&mut self, address: usize, value: u32) -> Result<(), BusError> {
-        let offset = self.get_offset(address)?;
+    fn write_32(&mut self, bus: &mut Bus, address: usize, value: u32) -> Result<(), BusError> {
+        let offset = self.get_offset(bus, address)?;
         if offset & 1 != 0 {
             Err(BusError::Alignment)
         } else {
@@ -146,7 +146,6 @@ mod tests {
     where
         T: FnOnce(&mut Memory) -> () + panic::UnwindSafe,
     {
-        crate::bus::REGISTERS.lock().unwrap().reset = false;
         let mut mem = Memory::new(0x1000, 0xffff, false).unwrap();
 
         test(&mut mem);

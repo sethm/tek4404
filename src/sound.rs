@@ -33,31 +33,31 @@ impl IoDevice for Sound {
     }
 
     // This is a write-only device. Reading produces no meaningful result.
-    fn read_8(&mut self, _: usize) -> std::result::Result<u8, BusError> {
+    fn read_8(&mut self, _: &mut Bus, _: usize) -> std::result::Result<u8, BusError> {
         Ok(0)
     }
 
     // This is a write-only device. Reading produces no meaningful result.
-    fn read_16(&mut self, _: usize) -> std::result::Result<u16, BusError> {
+    fn read_16(&mut self, _: &mut Bus, _: usize) -> std::result::Result<u16, BusError> {
         Ok(0)
     }
 
     // This is a write-only device. Reading produces no meaningful result.
-    fn read_32(&mut self, _: usize) -> std::result::Result<u32, BusError> {
+    fn read_32(&mut self, _: &mut Bus, _: usize) -> std::result::Result<u32, BusError> {
         Ok(0)
     }
 
-    fn write_8(&mut self, _: usize, data: u8) -> std::result::Result<(), BusError> {
+    fn write_8(&mut self, _: &mut Bus, _: usize, data: u8) -> std::result::Result<(), BusError> {
         info!("SOUND WRITE: data={:02x}", data);
         Ok(())
     }
 
-    fn write_16(&mut self, _: usize, data: u16) -> std::result::Result<(), BusError> {
+    fn write_16(&mut self, _: &mut Bus, _: usize, data: u16) -> std::result::Result<(), BusError> {
         info!("SOUND WRITE: data={:04x}", data);
         Ok(())
     }
 
-    fn write_32(&mut self, _: usize, data: u32) -> std::result::Result<(), BusError> {
+    fn write_32(&mut self, _: &mut Bus, _: usize, data: u32) -> std::result::Result<(), BusError> {
         info!("SOUND WRITE: data={:08x}", data);
         Ok(())
     }
