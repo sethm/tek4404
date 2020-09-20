@@ -55,6 +55,11 @@ pub fn init(log_level: LogLevel) {
     LOGGER.lock().unwrap().log_level = log_level;
 }
 
+pub fn is_debug() -> bool {
+    LOGGER.lock().unwrap().log_level <= LogLevel::Debug
+}
+
+
 macro_rules! log_common {
     ($level:expr, $($msg:expr),+) => {{
         {

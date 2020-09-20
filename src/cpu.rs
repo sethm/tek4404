@@ -66,13 +66,15 @@ pub fn execute(num_cycles: u32) -> u32 {
 
 #[no_mangle]
 extern "C" fn instruction_hook(pc: c_uint) {
-    unsafe {
-        let buf = Vec::<u8>::with_capacity(256);
-        let asm = CString::new(buf).unwrap();
-        let asm_buf = asm.into_raw();
-        m68k_disassemble(asm_buf, pc, M68K_CPU_TYPE_68010);
-        let s = CString::from_raw(asm_buf).into_string().unwrap();
+    if crate::log::is_debug() {
+        unsafe {
+            let buf = Vec::<u8>::with_capacity(256);
+            let asm = CString::new(buf).unwrap();
+            let asm_buf = asm.into_raw();
+            m68k_disassemble(asm_buf, pc, M68K_CPU_TYPE_68010);
+            let s = CString::from_raw(asm_buf).into_string().unwrap();
 
-        debug!("{:08x}: \t\t{}", pc, s);
+            debug!("{:08x}: \t\t{}", pc, s);
+        }
     }
 }

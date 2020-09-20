@@ -35,11 +35,13 @@ extern crate strum_macros;
 use crate::log::*;
 use clap::Clap;
 
+use std::time::Instant;
+
 #[derive(Clap)]
 struct Opts {
     #[clap(short, long, default_value = "100")]
     steps: u32,
-    #[clap(short, long, default_value = "none")]
+    #[clap(short, long, default_value = "debug")]
     loglvl: LogLevel,
 }
 
@@ -53,6 +55,13 @@ fn main() {
     cpu::init();
     cpu::reset();
     info!("BOOT");
+    let start = Instant::now();
     let cyc = cpu::execute(opts.steps);
-    info!("{} CYCLES COMPLETED.", cyc);
+    let duration = start.elapsed();
+    info!(
+        "{} CYCLES COMPLETED IN {:.4?} ({:.4} cycles/ms)",
+        cyc,
+        duration,
+        (cyc as f64 / duration.as_millis() as f64)
+    );
 }
