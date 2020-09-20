@@ -10,6 +10,9 @@ very young, in active development, and is skeletal.
 
 # Usage
 
+The emulator is written in Rust, and requires Rust 1.31 or later to
+compile. I have tried to avoid using Rust nightly features.
+
 At the moment, the most interesting things are the unit tests, which
 can be run with:
 
