@@ -104,3 +104,12 @@ macro_rules! info {
         log_common!(LogLevel::Info, $($msg),+);
     }};
 }
+
+#[macro_export]
+macro_rules! error {
+    ($($msg:expr),+) => {{
+        use crate::log::*;
+
+        log_common!(LogLevel::Error, $($msg),+);
+    }};
+}

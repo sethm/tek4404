@@ -32,6 +32,7 @@ extern crate lazy_static;
 extern crate strum;
 extern crate strum_macros;
 
+use crate::err::*;
 use crate::log::*;
 use clap::Clap;
 
@@ -39,6 +40,8 @@ use std::time::Instant;
 
 #[derive(Clap)]
 struct Opts {
+    #[clap(short, long)]
+    bootrom: String,
     #[clap(short, long, default_value = "100")]
     steps: u32,
     #[clap(short, long, default_value = "debug")]
@@ -50,18 +53,24 @@ fn main() {
 
     log::init(opts.loglvl);
 
-    info!("RESET");
-    bus::reset();
-    cpu::init();
-    cpu::reset();
-    info!("BOOT");
-    let start = Instant::now();
-    let cyc = cpu::execute(opts.steps);
-    let duration = start.elapsed();
-    info!(
-        "{} CYCLES COMPLETED IN {:.4?} ({:.4} cycles/ms)",
-        cyc,
-        duration,
-        (cyc as f64 / duration.as_millis() as f64)
-    );
+    info!("INITIALIZING");
+    match bus::reset(opts.bootrom.as_str()) {
+        Ok(()) => {   
+            cpu::init();
+            cpu::reset();
+            info!("BOOTING");
+            let start = Instant::now();
+            let cyc = cpu::execute(opts.steps);
+            let duration = start.elapsed();
+            info!(
+                "{} CYCLES COMPLETED IN {:.4?} ({:.4} cycles/ms)",
+                cyc,
+                duration,
+                (cyc as f64 / duration.as_millis() as f64)
+            );
+        }
+        Err(SimError::Init(msg)) => {
+            error!("Unable to start emulator: {}", msg);
+        }
+    }
 }

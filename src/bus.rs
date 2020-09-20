@@ -45,9 +45,9 @@ pub struct Bus {
     ram: BusDevice,
 }
 
-pub fn reset() {
+pub fn reset(boot_rom: &str) -> Result<(), SimError> {
     BUS.lock().unwrap().reset();
-    BUS.lock().unwrap().load_rom();
+    BUS.lock().unwrap().load_rom(boot_rom)
 }
 
 impl Bus {
@@ -93,10 +93,18 @@ impl Bus {
         }
     }
 
-    fn load_rom(&mut self) {
-        let rom_data = std::fs::read("./rom/boot.bin").unwrap();
-        trace!("Loaded {} bytes from ./rom/boot.bin", rom_data.len());
-        self.rom.lock().unwrap().load(rom_data);
+    fn load_rom(&mut self, rom_file: &str) -> Result<(), SimError> {
+        let result = std::fs::read(rom_file);
+        match result {
+            Ok(data) => {
+                self.rom.lock().unwrap().load(&data);
+                info!("Loaded {} bytes from {}", &data.len(), rom_file);
+                Ok(())
+            }
+            Err(_) => {
+                Err(SimError::Init(String::from("Could not load ROM file.")))
+            }
+        }
     }
 
     fn read_8(&self, address: usize) -> Result<u8, BusError> {
@@ -140,7 +148,7 @@ impl Bus {
 }
 
 pub trait IoDevice {
-    fn load(self: &mut Self, data: Vec<u8>);
+    fn load(self: &mut Self, data: &Vec<u8>);
     fn range(self: &Self) -> RangeInclusive<usize>;
     fn read_8(self: &Self, offset: usize) -> Result<u8, BusError>;
     fn read_16(self: &Self, offset: usize) -> Result<u16, BusError>;

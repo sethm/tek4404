@@ -137,7 +137,7 @@ impl IoDevice for Memory {
         }
     }
 
-    fn load(&mut self, data: Vec<u8>) {
+    fn load(&mut self, data: &Vec<u8>) {
         self.mem.copy_from_slice(data.as_slice());
     }
 }
