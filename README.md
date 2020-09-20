@@ -1,6 +1,7 @@
 # About
 
-This is a Tektronix 4404 emulator.
+This is a Tektronix 4404 emulator in the larval stage. There's nothing
+to see here yet.
 
 # Status
 
