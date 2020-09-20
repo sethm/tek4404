@@ -37,6 +37,7 @@ extern "C" {
 }
 
 pub fn bus_error() {
+    info!("m68k_pulse_bus_error()");
     unsafe {
         m68k_pulse_bus_error();
     }

@@ -26,6 +26,7 @@ mod bus;
 mod cpu;
 mod err;
 mod mem;
+mod sound;
 
 #[macro_use]
 extern crate lazy_static;
@@ -54,7 +55,7 @@ fn main() {
     log::init(opts.loglvl);
 
     info!("INITIALIZING");
-    match bus::reset(opts.bootrom.as_str()) {
+    match bus::load_rom(opts.bootrom.as_str()) {
         Ok(()) => {   
             cpu::init();
             cpu::reset();

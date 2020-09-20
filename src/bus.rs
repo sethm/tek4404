@@ -22,73 +22,79 @@
 use crate::cpu;
 use crate::err::*;
 use crate::mem::*;
+use crate::sound::*;
 
 use std::ops::RangeInclusive;
 use std::os::raw::c_uint;
-use std::sync::{Arc, Mutex};
+use std::sync::{Arc, Mutex, RwLock};
 
 pub const ROM_START: usize = 0x740000;
-pub const ROM_END: usize = 0x747fff;
+pub const ROM_END_PHYSICAL: usize = 0x747fff;
+pub const ROM_END_VIRTUAL: usize = 0x74ffff;
 
 pub const RAM_START: usize = 0;
 pub const RAM_END: usize = 0x1fffff;
 
+pub const SOUND_START: usize = 0x788000;
+pub const SOUND_END: usize = 0x788fff;
+
+pub const ACIA_START: usize = 0x78c000;
+pub const ACIA_END: usize = 0x78c007;
+
 lazy_static! {
-    pub static ref BUS: Mutex<Bus> = Mutex::new(Bus::new());
+    pub static ref BUS: Arc<Mutex<Bus>> = Arc::new(Mutex::new(Bus::new()));
 }
 
-pub type BusDevice = Arc<Mutex<dyn IoDevice + Send + Sync>>;
+pub type BusDevice = Arc<RwLock<dyn IoDevice + Send + Sync>>;
 
 pub struct Bus {
-    reset: bool,
+    pub reset: bool,
     rom: BusDevice,
     ram: BusDevice,
+    sound: BusDevice,
 }
 
-pub fn reset(boot_rom: &str) -> Result<(), SimError> {
-    BUS.lock().unwrap().reset();
-    BUS.lock().unwrap().load_rom(boot_rom)
+pub fn load_rom(boot_rom: &str) -> Result<(), SimError> {
+    Arc::clone(&BUS).lock().unwrap().load_rom(boot_rom)
 }
 
 impl Bus {
     pub fn new() -> Bus {
         Bus {
-            reset: false,
-            rom: Arc::new(Mutex::new(
-                Memory::new(ROM_START, ROM_END, true).expect("Unable to init ROM"),
+            reset: true,
+            rom: Arc::new(RwLock::new(
+                Memory::new(ROM_START, ROM_END_PHYSICAL, true).expect("Unable to init ROM"),
             )),
-            ram: Arc::new(Mutex::new(
+            ram: Arc::new(RwLock::new(
                 Memory::new(RAM_START, RAM_END, false).expect("Unable to init RAM"),
             )),
+            sound: Arc::new(RwLock::new(Sound {})),
         }
     }
 
-    pub fn reset(&mut self) {
-        self.reset = true;
-    }
-
-    fn get_offset(&self, address: usize, range: RangeInclusive<usize>) -> Result<usize, BusError> {
-        let start_addr = *range.start();
-        let end_addr = *range.end();
-        if self.reset {
-            Ok(address % 0x8000)
-        } else {
-            if address < start_addr || address > end_addr {
-                Err(BusError::Access)
-            } else {
-                Ok(address - start_addr)
+    fn get_device(&mut self, address: usize) -> Result<BusDevice, BusError> {
+        match address {
+            ROM_START..=ROM_END_VIRTUAL => Ok(Arc::clone(&self.rom)),
+            RAM_START..=RAM_END => {
+                if self.reset {
+                    Ok(Arc::clone(&self.rom))
+                } else {
+                    Ok(Arc::clone(&self.ram))
+                }
             }
-        }
-    }
-
-    fn get_device(&self, address: usize) -> Result<BusDevice, BusError> {
-        if self.reset {
-            Ok(Arc::clone(&self.rom))
-        } else {
-            match address {
-                ROM_START..=ROM_END => Ok(Arc::clone(&self.rom)),
-                RAM_START..=RAM_END => Ok(Arc::clone(&self.ram)),
-                _ => Err(BusError::Access),
+            SOUND_START..=SOUND_END => {
+                if self.reset {
+                    info!("Bus Reset flip-flop cleared. ROM now mapped");
+                    self.reset = false;
+                }
+                Ok(Arc::clone(&self.sound))
+            }
+            ACIA_START..=ACIA_END => {
+                todo!("ACIA at {:08x}-{:08x}", ACIA_START, ACIA_END);
+            }
+            _ => {
+                error!("No device at address {:08x}", address);
+                Err(BusError::Access)
             }
         }
     }
@@ -97,65 +103,60 @@ impl Bus {
         let result = std::fs::read(rom_file);
         match result {
             Ok(data) => {
-                self.rom.lock().unwrap().load(&data);
+                self.rom.write().unwrap().load(&data);
                 info!("Loaded {} bytes from {}", &data.len(), rom_file);
                 Ok(())
             }
-            Err(_) => {
-                Err(SimError::Init(String::from("Could not load ROM file.")))
-            }
+            Err(_) => Err(SimError::Init(String::from("Could not load ROM file."))),
         }
     }
 
-    fn read_8(&self, address: usize) -> Result<u8, BusError> {
+    fn read_8(&mut self, address: usize) -> Result<u8, BusError> {
         let mutex = self.get_device(address)?;
-        let dev = mutex.lock().unwrap();
-        dev.read_8(self.get_offset(address, dev.range())?)
+        let mut dev = mutex.write().unwrap();
+        dev.read_8(&self, address)
     }
 
-    fn read_16(&self, address: usize) -> Result<u16, BusError> {
+    fn read_16(&mut self, address: usize) -> Result<u16, BusError> {
         let mutex = self.get_device(address)?;
-        let dev = mutex.lock().unwrap();
-        dev.read_16(self.get_offset(address, dev.range())?)
+        let mut dev = mutex.write().unwrap();
+        dev.read_16(&self, address)
     }
 
-    fn read_32(&self, address: usize) -> Result<u32, BusError> {
+    fn read_32(&mut self, address: usize) -> Result<u32, BusError> {
         let mutex = self.get_device(address)?;
-        let dev = mutex.lock().unwrap();
-        dev.read_32(self.get_offset(address, dev.range())?)
+        let mut dev = mutex.write().unwrap();
+        dev.read_32(&self, address)
     }
 
-    fn write_8(&self, address: usize, value: u8) -> Result<(), BusError> {
+    fn write_8(&mut self, address: usize, value: u8) -> Result<(), BusError> {
         let mutex = self.get_device(address)?;
-        let mut dev = mutex.lock().unwrap();
-        let range = dev.range();
-        dev.write_8(self.get_offset(address, range)?, value)
+        let mut dev = mutex.write().unwrap();
+        dev.write_8(&self, address, value)
     }
 
-    fn write_16(&self, address: usize, value: u16) -> Result<(), BusError> {
+    fn write_16(&mut self, address: usize, value: u16) -> Result<(), BusError> {
         let mutex = self.get_device(address)?;
-        let mut dev = mutex.lock().unwrap();
-        let range = dev.range();
-        dev.write_16(self.get_offset(address, range)?, value)
+        let mut dev = mutex.write().unwrap();
+        dev.write_16(&self, address, value)
     }
 
-    fn write_32(&self, address: usize, value: u32) -> Result<(), BusError> {
+    fn write_32(&mut self, address: usize, value: u32) -> Result<(), BusError> {
         let mutex = self.get_device(address)?;
-        let mut dev = mutex.lock().unwrap();
-        let range = dev.range();
-        dev.write_32(self.get_offset(address, range)?, value)
+        let mut dev = mutex.write().unwrap();
+        dev.write_32(&self, address, value)
     }
 }
 
 pub trait IoDevice {
     fn load(self: &mut Self, data: &Vec<u8>);
     fn range(self: &Self) -> RangeInclusive<usize>;
-    fn read_8(self: &Self, offset: usize) -> Result<u8, BusError>;
-    fn read_16(self: &Self, offset: usize) -> Result<u16, BusError>;
-    fn read_32(self: &Self, offset: usize) -> Result<u32, BusError>;
-    fn write_8(self: &mut Self, offset: usize, value: u8) -> Result<(), BusError>;
-    fn write_16(self: &mut Self, offset: usize, value: u16) -> Result<(), BusError>;
-    fn write_32(self: &mut Self, offset: usize, value: u32) -> Result<(), BusError>;
+    fn read_8(self: &mut Self, bus: &Bus, address: usize) -> Result<u8, BusError>;
+    fn read_16(self: &mut Self, bus: &Bus, address: usize) -> Result<u16, BusError>;
+    fn read_32(self: &mut Self, bus: &Bus, address: usize) -> Result<u32, BusError>;
+    fn write_8(self: &mut Self, bus: &Bus, address: usize, value: u8) -> Result<(), BusError>;
+    fn write_16(self: &mut Self, bus: &Bus, address: usize, value: u16) -> Result<(), BusError>;
+    fn write_32(self: &mut Self, bus: &Bus, address: usize, value: u32) -> Result<(), BusError>;
 }
 
 #[no_mangle]
