@@ -19,11 +19,9 @@
 /// WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 /// OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 /// DEALINGS IN THE SOFTWARE.
-
-use crate::err::*;
 use crate::bus::IoDevice;
-use byteorder::{ByteOrder, BigEndian};
-
+use crate::err::*;
+use byteorder::{BigEndian, ByteOrder};
 use std::ops::RangeInclusive;
 
 #[allow(dead_code)]
@@ -36,7 +34,11 @@ pub struct Memory {
 }
 
 impl Memory {
-    pub fn new(start_address: usize, end_address: usize, read_only: bool) -> Result<Memory, SimError> {
+    pub fn new(
+        start_address: usize,
+        end_address: usize,
+        read_only: bool,
+    ) -> Result<Memory, SimError> {
         if start_address > end_address {
             return Err(SimError::Init(String::from("Invalid memory range")));
         }
@@ -73,7 +75,7 @@ impl IoDevice for Memory {
         if offset & 1 != 0 {
             Err(BusError::Alignment)
         } else if self.valid(offset) {
-            let buf = &self.mem[offset..=offset+1];
+            let buf = &self.mem[offset..=offset + 1];
             Ok(BigEndian::read_u16(buf))
         } else {
             Err(BusError::Access)
@@ -85,7 +87,7 @@ impl IoDevice for Memory {
         if offset & 1 != 0 {
             Err(BusError::Alignment)
         } else if self.valid(offset) {
-            let buf = &self.mem[offset..=offset+3];
+            let buf = &self.mem[offset..=offset + 3];
             Ok(BigEndian::read_u32(buf))
         } else {
             Err(BusError::Access)
@@ -112,7 +114,7 @@ impl IoDevice for Memory {
             if self.read_only {
                 Err(BusError::ReadOnly)
             } else {
-                let buf = &mut self.mem[offset..=offset+1];
+                let buf = &mut self.mem[offset..=offset + 1];
                 Ok(BigEndian::write_u16(buf, value))
             }
         } else {
@@ -127,7 +129,7 @@ impl IoDevice for Memory {
             if self.read_only {
                 Err(BusError::ReadOnly)
             } else {
-                let buf = &mut self.mem[offset..=offset+3];
+                let buf = &mut self.mem[offset..=offset + 3];
                 Ok(BigEndian::write_u32(buf, value))
             }
         } else {

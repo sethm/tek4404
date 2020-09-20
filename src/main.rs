@@ -22,9 +22,9 @@
 
 #[macro_use]
 mod log;
-mod err;
 mod bus;
 mod cpu;
+mod err;
 mod mem;
 
 #[macro_use]
@@ -37,9 +37,9 @@ use clap::Clap;
 
 #[derive(Clap)]
 struct Opts {
-    #[clap(short, long, default_value="100")]
+    #[clap(short, long, default_value = "100")]
     steps: u32,
-    #[clap(short, long, default_value="none")]
+    #[clap(short, long, default_value = "none")]
     loglvl: LogLevel,
 }
 

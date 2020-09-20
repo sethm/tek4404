@@ -19,14 +19,13 @@
 /// WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 /// OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 /// DEALINGS IN THE SOFTWARE.
-
 use crate::cpu;
 use crate::err::*;
 use crate::mem::*;
 
+use std::ops::RangeInclusive;
 use std::os::raw::c_uint;
 use std::sync::{Arc, Mutex};
-use std::ops::RangeInclusive;
 
 pub const ROM_START: usize = 0x740000;
 pub const ROM_END: usize = 0x747fff;
@@ -82,10 +81,7 @@ impl Bus {
         }
     }
 
-    fn get_device(
-        &self,
-        address: usize,
-    ) -> Result<BusDevice, BusError> {
+    fn get_device(&self, address: usize) -> Result<BusDevice, BusError> {
         if self.reset {
             Ok(Arc::clone(&self.rom))
         } else {
@@ -158,9 +154,7 @@ pub trait IoDevice {
 pub fn m68k_read_disassembler_8(address: c_uint) -> c_uint {
     match BUS.lock().unwrap().read_8(address as usize) {
         Ok(byte) => byte as c_uint,
-        Err(_) => {
-            0
-        }
+        Err(_) => 0,
     }
 }
 
@@ -168,9 +162,7 @@ pub fn m68k_read_disassembler_8(address: c_uint) -> c_uint {
 pub fn m68k_read_disassembler_16(address: c_uint) -> c_uint {
     match BUS.lock().unwrap().read_16(address as usize) {
         Ok(byte) => byte as c_uint,
-        Err(_) => {
-            0
-        }
+        Err(_) => 0,
     }
 }
 
@@ -178,9 +170,7 @@ pub fn m68k_read_disassembler_16(address: c_uint) -> c_uint {
 pub fn m68k_read_disassembler_32(address: c_uint) -> c_uint {
     match BUS.lock().unwrap().read_32(address as usize) {
         Ok(byte) => byte as c_uint,
-        Err(_) => {
-            0
-        }
+        Err(_) => 0,
     }
 }
 
@@ -190,7 +180,7 @@ pub fn m68k_read_memory_8(address: c_uint) -> c_uint {
         Ok(byte) => {
             trace!("Read BYTE {:08x} = {:04x}", address, byte);
             byte as c_uint
-        },
+        }
         Err(_) => {
             cpu::bus_error();
             0
@@ -204,7 +194,7 @@ pub fn m68k_read_memory_16(address: c_uint) -> c_uint {
         Ok(word) => {
             trace!("Read WORD {:08x} = {:04x}", address, word);
             word as c_uint
-        },
+        }
         Err(_) => {
             cpu::bus_error();
             0
@@ -218,7 +208,7 @@ pub fn m68k_read_memory_32(address: c_uint) -> c_uint {
         Ok(long) => {
             trace!("Read LONG {:08x} = {:08x}", address, long);
             long as c_uint
-        },
+        }
         Err(_) => {
             cpu::bus_error();
             0
@@ -230,13 +220,11 @@ pub fn m68k_read_memory_32(address: c_uint) -> c_uint {
 pub fn m68k_write_memory_8(addr: c_uint, val: c_uint) {
     trace!("Write BYTE {:08x} = {:02x}", addr, val);
     match BUS.lock().unwrap().write_8(addr as usize, val as u8) {
-        Ok(()) => {},
+        Ok(()) => {}
         Err(BusError::ReadOnly) => {
             trace!("READ-ONLY ERROR");
-        },
-        Err(_) => {
-            cpu::bus_error()
         }
+        Err(_) => cpu::bus_error(),
     }
 }
 
@@ -244,13 +232,11 @@ pub fn m68k_write_memory_8(addr: c_uint, val: c_uint) {
 pub fn m68k_write_memory_16(addr: c_uint, val: c_uint) {
     trace!("Write WORD {:08x} = {:04x}", addr, val);
     match BUS.lock().unwrap().write_16(addr as usize, val as u16) {
-        Ok(()) => {},
+        Ok(()) => {}
         Err(BusError::ReadOnly) => {
             trace!("READ-ONLY ERROR");
-        },
-        Err(_) => {
-            cpu::bus_error()
         }
+        Err(_) => cpu::bus_error(),
     }
 }
 
@@ -258,13 +244,11 @@ pub fn m68k_write_memory_16(addr: c_uint, val: c_uint) {
 pub fn m68k_write_memory_32(addr: c_uint, val: c_uint) {
     trace!("Write LONG {:08x} = {:08x}", addr, val);
     match BUS.lock().unwrap().write_32(addr as usize, val as u32) {
-        Ok(()) => {},
+        Ok(()) => {}
         Err(BusError::ReadOnly) => {
             trace!("READ-ONLY ERROR");
-        },
-        Err(_) => {
-            cpu::bus_error()
         }
+        Err(_) => cpu::bus_error(),
     }
 }
 

@@ -19,7 +19,6 @@
 /// WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 /// OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 /// DEALINGS IN THE SOFTWARE.
-
 use std::error::Error;
 use std::fmt;
 
@@ -72,7 +71,7 @@ pub enum SimError {
 impl fmt::Debug for SimError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match &*self {
-            SimError::Init(s) => write!(f, "Initialization Error: {}", s)
+            SimError::Init(s) => write!(f, "Initialization Error: {}", s),
         }
     }
 }
@@ -80,7 +79,7 @@ impl fmt::Debug for SimError {
 impl fmt::Display for SimError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match &*self {
-            SimError::Init(s) => write!(f, "Initialization Error: {}", s)
+            SimError::Init(s) => write!(f, "Initialization Error: {}", s),
         }
     }
 }

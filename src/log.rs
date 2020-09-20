@@ -19,24 +19,23 @@
 /// WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 /// OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 /// DEALINGS IN THE SOFTWARE.
-
 use clap::Clap;
-use strum_macros::{Display, EnumString};
 use std::sync::Mutex;
+use strum_macros::{Display, EnumString};
 
 #[derive(Clap, Eq, PartialEq, Ord, PartialOrd, Display, EnumString)]
 pub enum LogLevel {
-    #[strum(serialize="trace")]
+    #[strum(serialize = "trace")]
     Trace,
-    #[strum(serialize="debug")]
+    #[strum(serialize = "debug")]
     Debug,
-    #[strum(serialize="info")]
+    #[strum(serialize = "info")]
     Info,
-    #[strum(serialize="warn")]
+    #[strum(serialize = "warn")]
     Warn,
-    #[strum(serialize="error")]
+    #[strum(serialize = "error")]
     Error,
-    #[strum(serialize="none")]
+    #[strum(serialize = "none")]
     None,
 }
 
@@ -47,7 +46,9 @@ pub struct Logger {
 type LoggerRef = Mutex<Logger>;
 
 lazy_static! {
-    pub static ref LOGGER: LoggerRef = Mutex::new(Logger {log_level: LogLevel::None});
+    pub static ref LOGGER: LoggerRef = Mutex::new(Logger {
+        log_level: LogLevel::None
+    });
 }
 
 pub fn init(log_level: LogLevel) {

@@ -19,9 +19,8 @@
 /// WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 /// OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 /// DEALINGS IN THE SOFTWARE.
-
-use std::os::raw::{c_int, c_uint, c_char};
 use std::ffi::CString;
+use std::os::raw::{c_char, c_int, c_uint};
 
 const M68K_CPU_TYPE_68010: c_uint = 2;
 
