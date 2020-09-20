@@ -8,6 +8,47 @@ to see here yet.
 This is a work in progress and completely unusable. The project is
 very young, in active development, and is skeletal.
 
+# Usage
+
+At the moment, the most interesting things are the unit tests, which
+can be run with:
+
+    $ cargo test
+    
+To execute the boot rom, type:
+
+    $ cargo run -- -l debug -s 200
+    
+This will execute 200 machine cycles at the DEBUG log level. Example output:
+
+```
+    Finished dev [unoptimized + debuginfo] target(s) in 0.03s
+     Running `target/debug/tek4404 -l debug -s 200`
+[INFO ][tek4404] RESET
+[INFO ][tek4404] BOOT
+[DEBUG][    cpu] 00741b22: 		move.b  #$1, $740000.l
+[DEBUG][    cpu] 00741b2a: 		move.l  #$740000, D0
+[DEBUG][    cpu] 00741b30: 		movea.l D0, A6
+[DEBUG][    cpu] 00741b32: 		movec D0, VBR; (1+)
+[DEBUG][    cpu] 00741b36: 		move.b  #$e, (A6)
+[DEBUG][    cpu] 00741b3a: 		clr.l   D7
+[DEBUG][    cpu] 00741b3c: 		movea.l A6, A3
+[DEBUG][    cpu] 00741b3e: 		adda.l  #$ffec, A3
+[DEBUG][    cpu] 00741b44: 		move.w  ($a,A3), D0
+[DEBUG][    cpu] 00741b48: 		not.w   D0
+[DEBUG][    cpu] 00741b4a: 		move.w  ($8,A3), D1
+[DEBUG][    cpu] 00741b4e: 		eor.w   D1, D0
+[DEBUG][    cpu] 00741b50: 		beq     $741b6a
+[DEBUG][    cpu] 00741b6a: 		clr.l   D1
+[DEBUG][    cpu] 00741b6c: 		subq.b  #1, D1
+[DEBUG][    cpu] 00741b6e: 		move.l  D1, D2
+[DEBUG][    cpu] 00741b70: 		move.l  D1, D3
+[DEBUG][    cpu] 00741b72: 		move.l  D1, D4
+[DEBUG][    cpu] 00741b74: 		clr.l   D5
+[DEBUG][    cpu] 00741b76: 		move.w  ($6,A3), D5
+[INFO ][tek4404] 164 CYCLES COMPLETED IN 29.1746ms (5.6552 cycles/ms)
+```
+
 # Credits
 
 The Tektronix 4404 emulator uses [the Musashi Motorola 68000
