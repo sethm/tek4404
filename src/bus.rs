@@ -194,14 +194,47 @@ impl Bus {
 
 pub trait IoDevice {
     fn range(self: &Self) -> RangeInclusive<usize>;
-    fn read_8(self: &mut Self, bus: &mut Bus, address: usize) -> Result<u8, BusError>;
-    fn read_16(self: &mut Self, bus: &mut Bus, address: usize) -> Result<u16, BusError>;
-    fn read_32(self: &mut Self, bus: &mut Bus, address: usize) -> Result<u32, BusError>;
-    fn write_8(self: &mut Self, bus: &mut Bus, address: usize, value: u8) -> Result<(), BusError>;
-    fn write_16(self: &mut Self, bus: &mut Bus, address: usize, value: u16)
-        -> Result<(), BusError>;
-    fn write_32(self: &mut Self, bus: &mut Bus, address: usize, value: u32)
-        -> Result<(), BusError>;
+
+    // No-op defaults are provided as a convenience for any device
+    // that does not need to implement all data sizes.
+    fn read_8(self: &mut Self, _bus: &mut Bus, _address: usize) -> Result<u8, BusError> {
+        Ok(0)
+    }
+
+    fn read_16(self: &mut Self, _bus: &mut Bus, _address: usize) -> Result<u16, BusError> {
+        Ok(0)
+    }
+
+    fn read_32(self: &mut Self, _bus: &mut Bus, _address: usize) -> Result<u32, BusError> {
+        Ok(0)
+    }
+
+    fn write_8(
+        self: &mut Self,
+        _bus: &mut Bus,
+        _address: usize,
+        _value: u8,
+    ) -> Result<(), BusError> {
+        Ok(())
+    }
+
+    fn write_16(
+        self: &mut Self,
+        _bus: &mut Bus,
+        _address: usize,
+        _value: u16,
+    ) -> Result<(), BusError> {
+        Ok(())
+    }
+
+    fn write_32(
+        self: &mut Self,
+        _bus: &mut Bus,
+        _address: usize,
+        _value: u32,
+    ) -> Result<(), BusError> {
+        Ok(())
+    }
 
     // Only memory-like devices may need to load data, wo the default
     // implementation is a no-op.
@@ -236,7 +269,7 @@ pub fn m68k_read_disassembler_32(address: c_uint) -> c_uint {
 pub fn m68k_read_memory_8(address: c_uint) -> c_uint {
     match BUS.lock().unwrap().read_8(address as usize) {
         Ok(byte) => {
-            trace!("Read BYTE {:08x} = {:04x}", address, byte);
+            trace!("[ READ] [BYTE] {:08x} = {:04x}", address, byte);
             byte as c_uint
         }
         Err(_) => {
@@ -250,7 +283,7 @@ pub fn m68k_read_memory_8(address: c_uint) -> c_uint {
 pub fn m68k_read_memory_16(address: c_uint) -> c_uint {
     match BUS.lock().unwrap().read_16(address as usize) {
         Ok(word) => {
-            trace!("Read WORD {:08x} = {:04x}", address, word);
+            trace!("[ READ] [WORD] {:08x} = {:04x}", address, word);
             word as c_uint
         }
         Err(_) => {
@@ -264,7 +297,7 @@ pub fn m68k_read_memory_16(address: c_uint) -> c_uint {
 pub fn m68k_read_memory_32(address: c_uint) -> c_uint {
     match BUS.lock().unwrap().read_32(address as usize) {
         Ok(long) => {
-            trace!("Read LONG {:08x} = {:08x}", address, long);
+            trace!("[ READ] [LONG] {:08x} = {:08x}", address, long);
             long as c_uint
         }
         Err(_) => {
@@ -276,7 +309,7 @@ pub fn m68k_read_memory_32(address: c_uint) -> c_uint {
 
 #[no_mangle]
 pub fn m68k_write_memory_8(addr: c_uint, val: c_uint) {
-    trace!("Write BYTE {:08x} = {:02x}", addr, val);
+    trace!("[WRITE] [BYTE] {:08x} = {:02x}", addr, val);
     match BUS.lock().unwrap().write_8(addr as usize, val as u8) {
         Ok(()) => {}
         Err(BusError::ReadOnly) => {
@@ -288,7 +321,7 @@ pub fn m68k_write_memory_8(addr: c_uint, val: c_uint) {
 
 #[no_mangle]
 pub fn m68k_write_memory_16(addr: c_uint, val: c_uint) {
-    trace!("Write WORD {:08x} = {:04x}", addr, val);
+    trace!("[WRITE] [WORD] {:08x} = {:04x}", addr, val);
     match BUS.lock().unwrap().write_16(addr as usize, val as u16) {
         Ok(()) => {}
         Err(BusError::ReadOnly) => {
@@ -300,7 +333,7 @@ pub fn m68k_write_memory_16(addr: c_uint, val: c_uint) {
 
 #[no_mangle]
 pub fn m68k_write_memory_32(addr: c_uint, val: c_uint) {
-    trace!("Write LONG {:08x} = {:08x}", addr, val);
+    trace!("[WRITE] [LONG] {:08x} = {:08x}", addr, val);
     match BUS.lock().unwrap().write_32(addr as usize, val as u32) {
         Ok(()) => {}
         Err(BusError::ReadOnly) => {

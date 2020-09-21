@@ -3,13 +3,32 @@ use crate::bus::*;
 use crate::err::*;
 use std::ops::RangeInclusive;
 
+const DATA_REG: usize = 0x78c000;
+const STAT_REG: usize = 0x78c002;
+const CMD_REG: usize = 0x78c004;
+const CTRL_REG: usize = 0x78c006;
+
 pub struct Acia {
-    pub char: u8,
+    data: u8,
+    control: u8,
+    command: u8,
+    status: u8,
 }
 
 impl Acia {
     pub fn new() -> Acia {
-        Acia { char: 0 }
+        Acia {
+            data: 0,
+            control: 0,
+            command: 0,
+            status: 0,
+        }
+    }
+
+    fn handle_command(&mut self) {
+        info!("ACIA: HANDLING COMMAND {:02x}", self.command);
+
+        self.status = 0b00010000u8;
     }
 }
 
@@ -19,18 +38,14 @@ impl IoDevice for Acia {
     }
 
     fn read_8(&mut self, _: &mut Bus, address: usize) -> std::result::Result<u8, BusError> {
-        info!("ACIA READ BYTE: address={:08x}", address);
-        Ok(self.char)
-    }
-
-    fn read_16(&mut self, _: &mut Bus, address: usize) -> std::result::Result<u16, BusError> {
-        info!("ACIA READ WORD: address={:08x}", address);
-        Ok(0)
-    }
-
-    fn read_32(&mut self, _: &mut Bus, address: usize) -> std::result::Result<u32, BusError> {
-        info!("ACIA READ LONG: address={:08x}", address);
-        Ok(0)
+        let result = match address {
+            DATA_REG => self.data,
+            STAT_REG => self.status,
+            CMD_REG => self.command,
+            CTRL_REG => self.control,
+            _ => 0,
+        };
+        Ok(result)
     }
 
     fn write_8(
@@ -39,31 +54,25 @@ impl IoDevice for Acia {
         address: usize,
         data: u8,
     ) -> std::result::Result<(), BusError> {
-        info!(
-            "ACIA WRITE: address={:08x} data={:02x} ({})",
-            address, data, data as char
-        );
-        self.char = data;
-        Ok(())
-    }
-
-    fn write_16(
-        &mut self,
-        _: &mut Bus,
-        address: usize,
-        data: u16,
-    ) -> std::result::Result<(), BusError> {
-        info!("ACIA WRITE: address={:08x} data={:04x}", address, data);
-        Ok(())
-    }
-
-    fn write_32(
-        &mut self,
-        _: &mut Bus,
-        address: usize,
-        data: u32,
-    ) -> std::result::Result<(), BusError> {
-        info!("ACIA WRITE: address={:08x} data={:08x}", address, data);
+        match address {
+            DATA_REG => {
+                info!(
+                    "DEBUG ACIA TRANSMIT: ({})",
+                    match data {
+                        0x20..=0x7f => data as char,
+                        _ => '.',
+                    }
+                );
+                self.data = data;
+            }
+            STAT_REG => self.data = 0,
+            CMD_REG => {
+                self.command = data;
+                self.handle_command();
+            }
+            CTRL_REG => self.control = data,
+            _ => {}
+        }
         Ok(())
     }
 }
