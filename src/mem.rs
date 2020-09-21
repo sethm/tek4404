@@ -24,14 +24,13 @@ use crate::err::*;
 use byteorder::{BigEndian, ByteOrder};
 use std::ops::RangeInclusive;
 
-const RANGE_MIRROR: usize = 0x8000;
-
 #[allow(dead_code)]
 #[derive(Debug)]
 pub struct Memory {
     read_only: bool,
     start_address: usize,
     end_address: usize,
+    size: usize,
     mem: Vec<u8>,
 }
 
@@ -39,6 +38,7 @@ impl Memory {
     pub fn new(
         start_address: usize,
         end_address: usize,
+        size: usize,
         read_only: bool,
     ) -> Result<Memory, SimError> {
         if start_address > end_address {
@@ -49,15 +49,16 @@ impl Memory {
             read_only,
             start_address,
             end_address,
-            mem: vec![0; end_address - start_address + 1],
+            size,
+            mem: vec![0; size],
         })
     }
 
     fn get_offset(&self, bus: &mut Bus, address: usize) -> Result<usize, BusError> {
-        if bus.map_rom {
-            Ok(address % RANGE_MIRROR)
+        if self.read_only && bus.map_rom {
+            Ok(address % self.size)
         } else if self.range().contains(&address) {
-            Ok(address - self.start_address)
+            Ok((address - self.start_address) % self.size)
         } else {
             Err(BusError::Access)
         }
@@ -146,12 +147,14 @@ mod tests {
     where
         T: FnOnce(&mut Memory, &mut Bus) -> () + panic::UnwindSafe,
     {
-        let mut mem = Memory::new(0x1000, 0xffff, false).unwrap();
+        let mut mem = Memory::new(0x1000, 0xffff, 0xefff, false).unwrap();
         let mut bus = Bus {
             map_rom: false,
             rom: None,
             ram: None,
             sound: None,
+            acia: None,
+            debug_ram: None,
         };
 
         test(&mut mem, &mut bus);
@@ -159,7 +162,7 @@ mod tests {
 
     #[test]
     fn test_invalid_range() {
-        let mem = Memory::new(0x1000, 0, false);
+        let mem = Memory::new(0x1000, 0, 0x1000, false);
         assert!(mem.is_err());
     }
 
@@ -268,9 +271,18 @@ mod tests {
             assert_eq!(0x03, mem.mem[0x104]);
             assert_eq!(0x04, mem.mem[0x105]);
 
-            assert_eq!(Err(BusError::Alignment), mem.write_32(bus, 0x1101, 0x01020304));
-            assert_eq!(Err(BusError::Alignment), mem.write_32(bus, 0x1103, 0x01020304));
-            assert_eq!(Err(BusError::Access), mem.write_32(bus, 0x10000, 0x01020304));
+            assert_eq!(
+                Err(BusError::Alignment),
+                mem.write_32(bus, 0x1101, 0x01020304)
+            );
+            assert_eq!(
+                Err(BusError::Alignment),
+                mem.write_32(bus, 0x1103, 0x01020304)
+            );
+            assert_eq!(
+                Err(BusError::Access),
+                mem.write_32(bus, 0x10000, 0x01020304)
+            );
         })
     }
 
@@ -278,7 +290,40 @@ mod tests {
     fn test_write_32_read_only() {
         with_mem(|mem, bus| {
             mem.read_only = true;
-            assert_eq!(Err(BusError::ReadOnly), mem.write_32(bus, 0x1100, 0x01020304));
+            assert_eq!(
+                Err(BusError::ReadOnly),
+                mem.write_32(bus, 0x1100, 0x01020304)
+            );
         })
+    }
+
+    #[test]
+    fn test_mirroring() {
+        let mut mem = Memory::new(0x0, 0x7fff, 0x1000, false).unwrap();
+        let mut bus = Bus {
+            map_rom: false,
+            rom: None,
+            ram: None,
+            sound: None,
+            acia: None,
+            debug_ram: None,
+        };
+
+        mem.mem[0x100] = 0x01;
+        mem.mem[0x101] = 0x02;
+        mem.mem[0x102] = 0x03;
+        mem.mem[0x103] = 0x04;
+
+        assert_eq!(0x1000, mem.mem.len());
+
+        for base in (0..0x7000).step_by(0x1000) {
+            assert_eq!(0x01, mem.read_8(&mut bus, base + 0x100).unwrap());
+            assert_eq!(0x0102, mem.read_16(&mut bus, base + 0x100).unwrap());
+            assert_eq!(0x01020304, mem.read_32(&mut bus, base + 0x100).unwrap());
+        }
+
+        assert_eq!(Err(BusError::Access), mem.read_8(&mut bus, 0x8000));
+        assert_eq!(Err(BusError::Access), mem.read_16(&mut bus, 0x8000));
+        assert_eq!(Err(BusError::Access), mem.read_32(&mut bus, 0x8000));
     }
 }

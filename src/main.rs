@@ -27,6 +27,7 @@ mod cpu;
 mod err;
 mod mem;
 mod sound;
+mod acia;
 
 #[macro_use]
 extern crate lazy_static;

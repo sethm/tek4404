@@ -37,9 +37,6 @@ impl Sound {
 }
 
 impl IoDevice for Sound {
-    /// This is a no-op.
-    fn load(&mut self, _: &std::vec::Vec<u8>) {}
-
     fn range(&self) -> std::ops::RangeInclusive<usize> {
         SOUND_START..=SOUND_END
     }
