@@ -1,3 +1,4 @@
+use std::ffi::CStr;
 /// Copyright 2020 Seth Morabito <web@loomcom.com>
 ///
 /// Permission is hereby granted, free of charge, to any person
@@ -19,7 +20,6 @@
 /// WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 /// OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 /// DEALINGS IN THE SOFTWARE.
-use std::ffi::CString;
 use std::os::raw::{c_char, c_int, c_uint};
 
 const M68K_CPU_TYPE_68010: c_uint = 2;
@@ -32,7 +32,7 @@ extern "C" {
     pub fn m68k_pulse_reset();
     pub fn m68k_pulse_bus_error();
     pub fn m68k_execute(num_cycles: c_int) -> c_int;
-    pub fn m68k_disassemble(buf: *mut c_char, pc: c_uint, cpu_type: c_uint);
+    pub fn m68k_disassemble(buf: *mut c_char, pc: c_uint, cpu_type: c_uint) -> c_uint;
     pub fn m68k_set_instr_hook_callback(hook: InstructionHook);
 }
 
@@ -68,14 +68,12 @@ pub fn execute(num_cycles: u32) -> u32 {
 #[no_mangle]
 extern "C" fn instruction_hook(pc: c_uint) {
     if crate::log::is_debug() {
-        unsafe {
-            let buf = Vec::<u8>::with_capacity(256);
-            let asm = CString::new(buf).unwrap();
-            let asm_buf = asm.into_raw();
-            m68k_disassemble(asm_buf, pc, M68K_CPU_TYPE_68010);
-            let s = CString::from_raw(asm_buf).into_string().unwrap();
+        let mut c_arr: [c_char; 256] = [0; 256];
+        let c_ptr = c_arr.as_mut_ptr();
 
-            debug!("{:08x}:    {}", pc, s);
+        unsafe {
+            m68k_disassemble(c_ptr, pc, M68K_CPU_TYPE_68010);
+            debug!("{:08x}:    {}", pc, CStr::from_ptr(c_ptr).to_str().unwrap());
         }
     }
 }
