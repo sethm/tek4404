@@ -24,6 +24,18 @@ use crate::err::*;
 
 pub struct Sound {}
 
+impl Sound {
+    /// On initialization, the system comes up with the boot ROM
+    /// mapped to all RAM and ROM memory locations. Any write to the
+    /// sound chip will un-map the ROM from RAM space.
+    fn unmap_rom(&mut self, bus: &mut Bus) {
+        if bus.map_rom {
+            info!("Un-mapping boot ROM.");
+            bus.map_rom = false;
+        }
+    }
+}
+
 impl IoDevice for Sound {
     /// This is a no-op.
     fn load(&mut self, _: &std::vec::Vec<u8>) {}
@@ -47,18 +59,31 @@ impl IoDevice for Sound {
         Ok(0)
     }
 
-    fn write_8(&mut self, _: &mut Bus, _: usize, data: u8) -> std::result::Result<(), BusError> {
+    fn write_8(&mut self, bus: &mut Bus, _: usize, data: u8) -> std::result::Result<(), BusError> {
+        self.unmap_rom(bus);
         info!("SOUND WRITE: data={:02x}", data);
         Ok(())
     }
 
-    fn write_16(&mut self, _: &mut Bus, _: usize, data: u16) -> std::result::Result<(), BusError> {
+    fn write_16(
+        &mut self,
+        bus: &mut Bus,
+        _: usize,
+        data: u16,
+    ) -> std::result::Result<(), BusError> {
+        self.unmap_rom(bus);
         info!("SOUND WRITE: data={:04x}", data);
         Ok(())
     }
 
-    fn write_32(&mut self, _: &mut Bus, _: usize, data: u32) -> std::result::Result<(), BusError> {
-        info!("SOUND WRITE: data={:08x}", data);
+    fn write_32(
+        &mut self,
+        bus: &mut Bus,
+        _: usize,
+        data: u32,
+    ) -> std::result::Result<(), BusError> {
+        self.unmap_rom(bus);
+        info!("SOUND WRITE: data={:04x}", data);
         Ok(())
     }
 }

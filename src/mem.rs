@@ -144,11 +144,17 @@ mod tests {
 
     fn with_mem<T>(test: T) -> ()
     where
-        T: FnOnce(&mut Memory) -> () + panic::UnwindSafe,
+        T: FnOnce(&mut Memory, &mut Bus) -> () + panic::UnwindSafe,
     {
         let mut mem = Memory::new(0x1000, 0xffff, false).unwrap();
+        let mut bus = Bus {
+            map_rom: false,
+            rom: None,
+            ram: None,
+            sound: None,
+        };
 
-        test(&mut mem);
+        test(&mut mem, &mut bus);
     }
 
     #[test]
@@ -159,120 +165,120 @@ mod tests {
 
     #[test]
     fn test_read8() {
-        with_mem(|mem| {
+        with_mem(|mem, bus| {
             mem.mem[0x100] = 0x01;
             mem.mem[0x101] = 0x02;
             mem.mem[0x102] = 0x03;
             mem.mem[0x103] = 0x04;
 
-            assert_eq!(0x01, mem.read_8(0x1100).unwrap());
-            assert_eq!(0x02, mem.read_8(0x1101).unwrap());
-            assert_eq!(0x03, mem.read_8(0x1102).unwrap());
-            assert_eq!(0x04, mem.read_8(0x1103).unwrap());
+            assert_eq!(0x01, mem.read_8(bus, 0x1100).unwrap());
+            assert_eq!(0x02, mem.read_8(bus, 0x1101).unwrap());
+            assert_eq!(0x03, mem.read_8(bus, 0x1102).unwrap());
+            assert_eq!(0x04, mem.read_8(bus, 0x1103).unwrap());
 
-            assert_eq!(Err(BusError::Access), mem.read_8(0x10000));
+            assert_eq!(Err(BusError::Access), mem.read_8(bus, 0x10000));
         });
     }
 
     #[test]
     fn test_read16() {
-        with_mem(|mem| {
+        with_mem(|mem, bus| {
             mem.mem[0x100] = 0x01;
             mem.mem[0x101] = 0x02;
             mem.mem[0x102] = 0x03;
             mem.mem[0x103] = 0x04;
 
-            assert_eq!(0x0102, mem.read_16(0x1100).unwrap());
-            assert_eq!(0x0304, mem.read_16(0x1102).unwrap());
+            assert_eq!(0x0102, mem.read_16(bus, 0x1100).unwrap());
+            assert_eq!(0x0304, mem.read_16(bus, 0x1102).unwrap());
 
-            assert_eq!(Err(BusError::Alignment), mem.read_16(0x1101));
-            assert_eq!(Err(BusError::Alignment), mem.read_16(0x1103));
-            assert_eq!(Err(BusError::Access), mem.read_16(0x10000));
+            assert_eq!(Err(BusError::Alignment), mem.read_16(bus, 0x1101));
+            assert_eq!(Err(BusError::Alignment), mem.read_16(bus, 0x1103));
+            assert_eq!(Err(BusError::Access), mem.read_16(bus, 0x10000));
         });
     }
 
     #[test]
     fn test_read32() {
-        with_mem(|mem| {
+        with_mem(|mem, bus| {
             mem.mem[0x100] = 0x01;
             mem.mem[0x101] = 0x02;
             mem.mem[0x102] = 0x03;
             mem.mem[0x103] = 0x04;
 
-            assert_eq!(0x01020304, mem.read_32(0x1100).unwrap());
-            assert_eq!(0x03040000, mem.read_32(0x1102).unwrap());
+            assert_eq!(0x01020304, mem.read_32(bus, 0x1100).unwrap());
+            assert_eq!(0x03040000, mem.read_32(bus, 0x1102).unwrap());
 
-            assert_eq!(Err(BusError::Alignment), mem.read_32(0x1101));
-            assert_eq!(Err(BusError::Alignment), mem.read_32(0x1103));
-            assert_eq!(Err(BusError::Access), mem.read_32(0x10000));
+            assert_eq!(Err(BusError::Alignment), mem.read_32(bus, 0x1101));
+            assert_eq!(Err(BusError::Alignment), mem.read_32(bus, 0x1103));
+            assert_eq!(Err(BusError::Access), mem.read_32(bus, 0x10000));
         });
     }
 
     #[test]
     fn test_write_8() {
-        with_mem(|mem| {
-            let _ = mem.write_8(0x1100, 0x01);
+        with_mem(|mem, bus| {
+            let _ = mem.write_8(bus, 0x1100, 0x01);
             assert_eq!(0x01, mem.mem[0x100]);
 
-            assert_eq!(Err(BusError::Access), mem.write_8(0x10000, 0x01));
+            assert_eq!(Err(BusError::Access), mem.write_8(bus, 0x10000, 0x01));
         })
     }
 
     #[test]
     fn test_write_8_read_only() {
-        with_mem(|mem| {
+        with_mem(|mem, bus| {
             mem.read_only = true;
-            assert_eq!(Err(BusError::ReadOnly), mem.write_8(0x1100, 0x01));
+            assert_eq!(Err(BusError::ReadOnly), mem.write_8(bus, 0x1100, 0x01));
         })
     }
 
     #[test]
     fn test_write_16() {
-        with_mem(|mem| {
-            let _ = mem.write_16(0x1100, 0x0102);
+        with_mem(|mem, bus| {
+            let _ = mem.write_16(bus, 0x1100, 0x0102);
             assert_eq!(0x01, mem.mem[0x100]);
             assert_eq!(0x02, mem.mem[0x101]);
 
-            assert_eq!(Err(BusError::Alignment), mem.write_16(0x1101, 0x0102));
-            assert_eq!(Err(BusError::Alignment), mem.write_16(0x1103, 0x0102));
-            assert_eq!(Err(BusError::Access), mem.write_16(0x10000, 0x0102));
+            assert_eq!(Err(BusError::Alignment), mem.write_16(bus, 0x1101, 0x0102));
+            assert_eq!(Err(BusError::Alignment), mem.write_16(bus, 0x1103, 0x0102));
+            assert_eq!(Err(BusError::Access), mem.write_16(bus, 0x10000, 0x0102));
         })
     }
 
     #[test]
     fn test_write_16_read_only() {
-        with_mem(|mem| {
+        with_mem(|mem, bus| {
             mem.read_only = true;
-            assert_eq!(Err(BusError::ReadOnly), mem.write_16(0x1100, 0x0102));
+            assert_eq!(Err(BusError::ReadOnly), mem.write_16(bus, 0x1100, 0x0102));
         })
     }
 
     #[test]
     fn test_write_32() {
-        with_mem(|mem| {
-            let _ = mem.write_32(0x1100, 0x01020304);
+        with_mem(|mem, bus| {
+            let _ = mem.write_32(bus, 0x1100, 0x01020304);
             assert_eq!(0x01, mem.mem[0x100]);
             assert_eq!(0x02, mem.mem[0x101]);
             assert_eq!(0x03, mem.mem[0x102]);
             assert_eq!(0x04, mem.mem[0x103]);
 
-            let _ = mem.write_32(0x1102, 0x01020304);
+            let _ = mem.write_32(bus, 0x1102, 0x01020304);
             assert_eq!(0x01, mem.mem[0x102]);
             assert_eq!(0x02, mem.mem[0x103]);
             assert_eq!(0x03, mem.mem[0x104]);
             assert_eq!(0x04, mem.mem[0x105]);
 
-            assert_eq!(Err(BusError::Alignment), mem.write_32(0x1101, 0x01020304));
-            assert_eq!(Err(BusError::Alignment), mem.write_32(0x1103, 0x01020304));
-            assert_eq!(Err(BusError::Access), mem.write_32(0x10000, 0x01020304));
+            assert_eq!(Err(BusError::Alignment), mem.write_32(bus, 0x1101, 0x01020304));
+            assert_eq!(Err(BusError::Alignment), mem.write_32(bus, 0x1103, 0x01020304));
+            assert_eq!(Err(BusError::Access), mem.write_32(bus, 0x10000, 0x01020304));
         })
     }
 
     #[test]
     fn test_write_32_read_only() {
-        with_mem(|mem| {
+        with_mem(|mem, bus| {
             mem.read_only = true;
-            assert_eq!(Err(BusError::ReadOnly), mem.write_32(0x1100, 0x01020304));
+            assert_eq!(Err(BusError::ReadOnly), mem.write_32(bus, 0x1100, 0x01020304));
         })
     }
 }

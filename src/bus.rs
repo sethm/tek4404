@@ -55,9 +55,9 @@ pub type BusDevice = Option<Arc<RwLock<dyn IoDevice + Send + Sync>>>;
 
 pub struct Bus {
     pub map_rom: bool,
-    rom: BusDevice,
-    ram: BusDevice,
-    sound: BusDevice,
+    pub rom: BusDevice,
+    pub ram: BusDevice,
+    pub sound: BusDevice,
 }
 
 pub fn load_rom(boot_rom: &str) -> Result<(), SimError> {
