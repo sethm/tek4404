@@ -148,14 +148,7 @@ mod tests {
         T: FnOnce(&mut Memory, &mut Bus) -> () + panic::UnwindSafe,
     {
         let mut mem = Memory::new(0x1000, 0xffff, 0xefff, false).unwrap();
-        let mut bus = Bus {
-            map_rom: false,
-            rom: None,
-            ram: None,
-            sound: None,
-            acia: None,
-            debug_ram: None,
-        };
+        let mut bus = Bus::empty();
 
         test(&mut mem, &mut bus);
     }

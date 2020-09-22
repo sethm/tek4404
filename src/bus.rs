@@ -57,64 +57,93 @@ lazy_static! {
     pub static ref BUS: Mutex<Bus> = Mutex::new(Bus::new());
 }
 
-pub type BusDevice = Option<Arc<RwLock<dyn IoDevice + Send + Sync>>>;
-
-pub struct Bus {
-    pub map_rom: bool,
-    pub rom: BusDevice,
-    pub ram: BusDevice,
-    pub debug_ram: BusDevice,
-    pub sound: BusDevice,
-    pub acia: BusDevice,
-}
-
 pub fn load_rom(boot_rom: &str) -> Result<(), SimError> {
     BUS.lock().unwrap().load_rom(boot_rom)
 }
 
+pub type BusDevice = Arc<RwLock<dyn IoDevice + Send + Sync>>;
+pub type MemoryDevice = Arc<RwLock<Memory>>;
+pub type SoundDevice = Arc<RwLock<Sound>>;
+pub type AciaDevice = Arc<RwLock<Acia>>;
+
+pub struct Bus {
+    pub map_rom: bool,
+    pub rom: Option<MemoryDevice>,
+    pub ram: Option<MemoryDevice>,
+    pub debug_ram: Option<MemoryDevice>,
+    pub sound: Option<SoundDevice>,
+    pub acia: Option<AciaDevice>,
+}
+
 impl Bus {
-    pub fn new() -> Bus {
+    #[allow(dead_code)]
+    pub fn empty() -> Self {
+        Bus {
+            map_rom: false,
+            rom: None,
+            ram: None,
+            debug_ram: None,
+            sound: None,
+            acia: None,
+        }
+    }
+
+    pub fn new() -> Self {
         Bus {
             map_rom: true,
             rom: Some(Arc::new(RwLock::new(
-                Memory::new(ROM_START, ROM_END, ROM_SIZE, true).expect("Unable to init ROM"),
+                Memory::new(ROM_START, ROM_END, ROM_SIZE, true).unwrap(),
             ))),
             ram: Some(Arc::new(RwLock::new(
-                Memory::new(RAM_START, RAM_END, RAM_SIZE, false).expect("Unable to init RAM"),
+                Memory::new(RAM_START, RAM_END, RAM_SIZE, false).unwrap(),
             ))),
             debug_ram: Some(Arc::new(RwLock::new(
-                Memory::new(DEBUG_RAM_START, DEBUG_RAM_END, DEBUG_RAM_SIZE, false)
-                    .expect("Unable to init Debug RAM"),
+                Memory::new(DEBUG_RAM_START, DEBUG_RAM_END, DEBUG_RAM_SIZE, false).unwrap(),
             ))),
             sound: Some(Arc::new(RwLock::new(Sound {}))),
             acia: Some(Arc::new(RwLock::new(Acia::new()))),
         }
     }
 
-    fn map_device(&self, address: usize) -> Result<&BusDevice, BusError> {
-        match address {
-            ROM_START..=ROM_END => Ok(&self.rom),
+    fn map_device(&mut self, addr: usize) -> Result<BusDevice, BusError> {
+        match addr {
+            ROM_START..=ROM_END => match &mut self.rom {
+                Some(d) => Ok(d.clone()),
+                None => Err(BusError::Access),
+            },
             RAM_START..=RAM_END => {
                 if self.map_rom {
-                    Ok(&self.rom)
+                    match &mut self.rom {
+                        Some(d) => Ok(d.clone()),
+                        None => Err(BusError::Access),
+                    }
                 } else {
-                    Ok(&self.ram)
+                    match &mut self.ram {
+                        Some(d) => Ok(d.clone()),
+                        None => Err(BusError::Access),
+                    }
                 }
             }
-            DEBUG_RAM_START..=DEBUG_RAM_END => Ok(&self.debug_ram),
-            SOUND_START..=SOUND_END => Ok(&self.sound),
-            ACIA_START..=ACIA_END => Ok(&self.acia),
-            _ => {
-                error!("No device at address {:08x}", address);
-                Err(BusError::Access)
-            }
+            DEBUG_RAM_START..=DEBUG_RAM_END => match &mut self.debug_ram {
+                Some(d) => Ok(d.clone()),
+                None => Err(BusError::Access),
+            },
+            SOUND_START..=SOUND_END => match &mut self.sound {
+                Some(d) => Ok(d.clone()),
+                None => Err(BusError::Access),
+            },
+            ACIA_START..=ACIA_END => match &mut self.acia {
+                Some(d) => Ok(d.clone()),
+                None => Err(BusError::Access),
+            },
+            _ => Err(BusError::Access),
         }
     }
 
     fn load_rom(&mut self, rom_file: &str) -> Result<(), SimError> {
         let result = std::fs::read(rom_file);
         match result {
-            Ok(data) => match &self.rom {
+            Ok(data) => match &mut self.rom {
                 Some(dev) => {
                     info!("Loaded {} bytes from {}", &data.len(), rom_file);
                     Ok(dev.write().unwrap().load(&data))
@@ -126,69 +155,45 @@ impl Bus {
     }
 
     fn read_8(&mut self, address: usize) -> Result<u8, BusError> {
-        let dev = self.map_device(address)?.clone();
-        match dev {
-            Some(dev) => {
-                let mut d = dev.write().unwrap();
-                d.read_8(self, address)
-            }
-            None => Err(BusError::Access),
-        }
+        self.map_device(address)?
+            .write()
+            .unwrap()
+            .read_8(self, address)
     }
 
     fn read_16(&mut self, address: usize) -> Result<u16, BusError> {
-        let dev = self.map_device(address)?.clone();
-        match dev {
-            Some(dev) => {
-                let mut d = dev.write().unwrap();
-                d.read_16(self, address)
-            }
-            None => Err(BusError::Access),
-        }
+        self.map_device(address)?
+            .write()
+            .unwrap()
+            .read_16(self, address)
     }
 
     fn read_32(&mut self, address: usize) -> Result<u32, BusError> {
-        let dev = self.map_device(address)?.clone();
-        match dev {
-            Some(dev) => {
-                let mut d = dev.write().unwrap();
-                d.read_32(self, address)
-            }
-            None => Err(BusError::Access),
-        }
+        self.map_device(address)?
+            .write()
+            .unwrap()
+            .read_32(self, address)
     }
 
     fn write_8(&mut self, address: usize, value: u8) -> Result<(), BusError> {
-        let dev = self.map_device(address)?.clone();
-        match dev {
-            Some(dev) => {
-                let mut d = dev.write().unwrap();
-                d.write_8(self, address, value)
-            }
-            None => Err(BusError::Access),
-        }
+        self.map_device(address)?
+            .write()
+            .unwrap()
+            .write_8(self, address, value)
     }
 
     fn write_16(&mut self, address: usize, value: u16) -> Result<(), BusError> {
-        let dev = self.map_device(address)?.clone();
-        match dev {
-            Some(dev) => {
-                let mut d = dev.write().unwrap();
-                d.write_16(self, address, value)
-            }
-            None => Err(BusError::Access),
-        }
+        self.map_device(address)?
+            .write()
+            .unwrap()
+            .write_16(self, address, value)
     }
 
     fn write_32(&mut self, address: usize, value: u32) -> Result<(), BusError> {
-        let dev = self.map_device(address)?.clone();
-        match dev {
-            Some(dev) => {
-                let mut d = dev.write().unwrap();
-                d.write_32(self, address, value)
-            }
-            None => Err(BusError::Access),
-        }
+        self.map_device(address)?
+            .write()
+            .unwrap()
+            .write_32(self, address, value)
     }
 }
 
