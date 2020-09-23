@@ -51,7 +51,7 @@ struct Opts {
     bootrom: String,
     #[clap(short, long, default_value = "100")]
     steps: u32,
-    #[clap(short, long, default_value = "debug")]
+    #[clap(short, long, default_value = "info")]
     loglvl: LogLevel,
 }
 
