@@ -23,7 +23,7 @@ use clap::Clap;
 use std::sync::Mutex;
 use strum_macros::{Display, EnumString};
 
-#[derive(Clap, Eq, PartialEq, Ord, PartialOrd, Display, EnumString)]
+#[derive(Clap, Eq, PartialEq, Ord, PartialOrd, Display, EnumString, Clone)]
 pub enum LogLevel {
     #[strum(serialize = "trace")]
     Trace,
@@ -58,7 +58,6 @@ pub fn init(log_level: LogLevel) {
 pub fn is_debug() -> bool {
     LOGGER.lock().unwrap().log_level <= LogLevel::Debug
 }
-
 
 macro_rules! log_common {
     ($level:expr, $($msg:expr),+) => {{

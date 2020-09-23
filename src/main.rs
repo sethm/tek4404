@@ -22,12 +22,12 @@
 
 #[macro_use]
 mod log;
+mod acia;
 mod bus;
 mod cpu;
 mod err;
 mod mem;
 mod sound;
-mod acia;
 
 #[macro_use]
 extern crate lazy_static;
@@ -36,9 +36,14 @@ extern crate strum_macros;
 
 use crate::err::*;
 use crate::log::*;
+
+use std::error::Error;
+use std::{thread, time};
+
 use clap::Clap;
 
-use std::time::Instant;
+use tokio::io::{AsyncReadExt, AsyncWriteExt};
+use tokio::net::TcpListener;
 
 #[derive(Clap)]
 struct Opts {
@@ -50,29 +55,59 @@ struct Opts {
     loglvl: LogLevel,
 }
 
-fn main() {
-    let opts: Opts = Opts::parse();
+async fn acia_listener() {
+    info!("Spawning Debug ACIA listener on 127.0.0.1:9090");
+    let mut listener = TcpListener::bind("127.0.0.1:9090").await.expect("");
+    loop {
+        let (mut socket, _) = listener.accept().await.expect("");
+        tokio::spawn(async move {
+            let mut buf = [0; 1024];
+            loop {
+                let n = socket
+                    .read(&mut buf)
+                    .await
+                    .expect("failed to read data from socket");
 
-    log::init(opts.loglvl);
+                if n == 0 {
+                    return;
+                }
 
-    info!("INITIALIZING");
+                socket
+                    .write_all(&buf[0..n])
+                    .await
+                    .expect("failed to write data to socket");
+            }
+        });
+    }
+}
+
+async fn run_cpu(opts: Opts) {
     match bus::load_rom(opts.bootrom.as_str()) {
         Ok(()) => {
+            let sleep_duration = time::Duration::from_millis(100);
             cpu::init();
             cpu::reset();
             info!("BOOTING");
-            let start = Instant::now();
-            let cyc = cpu::execute(opts.steps);
-            let duration = start.elapsed();
-            info!(
-                "{} CYCLES COMPLETED IN {:.4?} ({:.4} cycles/ms)",
-                cyc,
-                duration,
-                (cyc as f64 / duration.as_millis() as f64)
-            );
+            loop {
+                let _ = cpu::execute(opts.steps);
+                thread::sleep(sleep_duration);
+            }
         }
         Err(SimError::Init(msg)) => {
             error!("Unable to start emulator: {}", msg);
         }
     }
+}
+
+#[tokio::main]
+async fn main() -> Result<(), Box<dyn Error>> {
+    let opts: Opts = Opts::parse();
+
+    log::init(opts.loglvl.clone());
+
+    info!("INITIALIZING");
+
+    let (_, _) = tokio::join!(tokio::spawn(acia_listener()), tokio::spawn(run_cpu(opts)),);
+
+    Ok(())
 }
