@@ -55,7 +55,7 @@ struct Opts {
     loglvl: LogLevel,
 }
 
-async fn acia_listener() {
+async fn acia_listener() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     info!("Spawning Debug ACIA listener on 127.0.0.1:9090");
     let mut listener = TcpListener::bind("127.0.0.1:9090").await.expect("");
     loop {
@@ -81,8 +81,15 @@ async fn acia_listener() {
     }
 }
 
-async fn run_cpu(opts: Opts) {
-    match bus::load_rom(opts.bootrom.as_str()) {
+#[tokio::main]
+async fn main() -> Result<(), Box<dyn Error>> {
+    let opts: Opts = Opts::parse();
+
+    log::init(opts.loglvl.clone());
+
+    info!("INITIALIZING");
+
+    thread::spawn(move || match bus::load_rom(opts.bootrom.as_str()) {
         Ok(()) => {
             let sleep_duration = time::Duration::from_millis(100);
             cpu::init();
@@ -96,18 +103,9 @@ async fn run_cpu(opts: Opts) {
         Err(SimError::Init(msg)) => {
             error!("Unable to start emulator: {}", msg);
         }
-    }
-}
+    });
 
-#[tokio::main]
-async fn main() -> Result<(), Box<dyn Error>> {
-    let opts: Opts = Opts::parse();
-
-    log::init(opts.loglvl.clone());
-
-    info!("INITIALIZING");
-
-    let (_, _) = tokio::join!(tokio::spawn(acia_listener()), tokio::spawn(run_cpu(opts)),);
+    let _ = tokio::join!(tokio::spawn(acia_listener()));
 
     Ok(())
 }
