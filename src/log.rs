@@ -25,6 +25,8 @@ use strum_macros::{Display, EnumString};
 
 #[derive(Clap, Eq, PartialEq, Ord, PartialOrd, Display, EnumString, Clone)]
 pub enum LogLevel {
+    #[strum(serialize = "io")]
+    Io,
     #[strum(serialize = "trace")]
     Trace,
     #[strum(serialize = "debug")]
@@ -68,13 +70,22 @@ macro_rules! log_common {
                 let display: Vec<&str> = full_mod.split("::").collect();
                 let name = $level.to_string().to_uppercase();
                 match display.last() {
-                    Some(e) => print!("[{:^5}][{:>7}] ", name, e),
-                    None => print!("[{:^5}][    ???] ", name),
+                    Some(e) => print!("[{:5}][{:7}] ", name, e),
+                    None => print!("[{:5}][    ???] ", name),
                 }
                 println!($($msg),+);
             }
         }
     }}
+}
+
+#[macro_export]
+macro_rules! io {
+    ($($msg:expr),+) => {{
+        use crate::log::*;
+
+        log_common!(LogLevel::Io, $($msg),+);
+    }};
 }
 
 #[macro_export]

@@ -34,17 +34,18 @@ extern crate lazy_static;
 extern crate strum;
 extern crate strum_macros;
 
-use crate::err::*;
+use crate::cpu::Cpu;
 use crate::log::*;
+use acia::Acia;
 
 use std::error::Error;
-use std::{thread, time};
 
 use clap::Clap;
 
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::net::TcpListener;
 
+#[allow(dead_code)]
 #[derive(Clap)]
 struct Opts {
     #[clap(short, long)]
@@ -55,6 +56,7 @@ struct Opts {
     loglvl: LogLevel,
 }
 
+#[allow(dead_code)]
 async fn acia_listener() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     info!("Spawning Debug ACIA listener on 127.0.0.1:9090");
     let mut listener = TcpListener::bind("127.0.0.1:9090").await.expect("");
@@ -81,6 +83,16 @@ async fn acia_listener() -> Result<(), Box<dyn std::error::Error + Send + Sync>>
     }
 }
 
+async fn run_cpu(cpu: &mut Cpu) {
+    cpu.step().await;
+}
+
+use std::sync::{Arc, RwLock};
+
+async fn do_io(acia: &mut Arc<RwLock<Acia>>) {
+    acia.write().unwrap().do_io().await;
+}
+
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn Error>> {
     let opts: Opts = Opts::parse();
@@ -89,23 +101,10 @@ async fn main() -> Result<(), Box<dyn Error>> {
 
     info!("INITIALIZING");
 
-    thread::spawn(move || match bus::load_rom(opts.bootrom.as_str()) {
-        Ok(()) => {
-            let sleep_duration = time::Duration::from_millis(100);
-            cpu::init();
-            cpu::reset();
-            info!("BOOTING");
-            loop {
-                let _ = cpu::execute(opts.steps);
-                thread::sleep(sleep_duration);
-            }
-        }
-        Err(SimError::Init(msg)) => {
-            error!("Unable to start emulator: {}", msg);
-        }
-    });
+    let mut cpu = Cpu::new(opts.bootrom.as_str(), opts.steps);
+    let mut acia = bus::BUS.lock().unwrap().acia.clone().unwrap().clone();
 
-    let _ = tokio::join!(tokio::spawn(acia_listener()));
-
-    Ok(())
+    loop {
+        tokio::join!(run_cpu(&mut cpu), do_io(&mut acia),);
+    }
 }

@@ -21,6 +21,10 @@ use std::ffi::CStr;
 /// OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 /// DEALINGS IN THE SOFTWARE.
 use std::os::raw::{c_char, c_int, c_uint};
+use std::{thread, time};
+
+use crate::bus;
+use crate::err::SimError;
 
 const M68K_CPU_TYPE_68010: c_uint = 2;
 
@@ -36,6 +40,36 @@ extern "C" {
     pub fn m68k_set_instr_hook_callback(hook: InstructionHook);
 }
 
+pub struct Cpu {
+    pub steps: u32,
+    pub cycles: u64,
+}
+
+impl Cpu {
+    pub fn new(rom_file: &str, steps: u32) -> Self {
+        match bus::load_rom(rom_file) {
+            Ok(()) => {
+                info!("Initializing CPU.");
+                init();
+                info!("Resetting CPU.");
+                reset();
+            }
+            Err(SimError::Init(msg)) => {
+                panic!(msg);
+            }
+        }
+
+        Cpu { steps, cycles: 0 }
+    }
+
+    pub async fn step(&mut self) {
+        let cycles = execute(self.steps);
+        self.cycles += cycles as u64;
+        debug!("<{} cycles completed - step function>", self.cycles);
+        thread::sleep(time::Duration::from_millis(50));
+    }
+}
+
 pub fn bus_error() {
     info!("m68k_pulse_bus_error()");
     unsafe {
@@ -43,7 +77,7 @@ pub fn bus_error() {
     }
 }
 
-pub fn init() {
+fn init() {
     unsafe {
         m68k_init();
         m68k_set_cpu_type(M68K_CPU_TYPE_68010);
@@ -51,7 +85,7 @@ pub fn init() {
     }
 }
 
-pub fn reset() {
+fn reset() {
     unsafe {
         m68k_pulse_reset();
     }
@@ -73,7 +107,7 @@ extern "C" fn instruction_hook(pc: c_uint) {
 
         unsafe {
             m68k_disassemble(c_ptr, pc, M68K_CPU_TYPE_68010);
-            debug!("{:08x}:    {}", pc, CStr::from_ptr(c_ptr).to_str().unwrap());
+            trace!("{:08x}:    {}", pc, CStr::from_ptr(c_ptr).to_str().unwrap());
         }
     }
 }

@@ -30,6 +30,10 @@ impl Acia {
 
         self.status = 0b00010000u8;
     }
+
+    pub async fn do_io(&mut self) {
+        debug!("[ACIA DOING IO...]");
+    }
 }
 
 impl IoDevice for Acia {
