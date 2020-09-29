@@ -1,4 +1,3 @@
-use std::ffi::CStr;
 /// Copyright 2020 Seth Morabito <web@loomcom.com>
 ///
 /// Permission is hereby granted, free of charge, to any person
@@ -20,11 +19,10 @@ use std::ffi::CStr;
 /// WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 /// OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 /// DEALINGS IN THE SOFTWARE.
-use std::os::raw::{c_char, c_int, c_uint};
-use std::{thread, time};
-
 use crate::bus;
 use crate::err::SimError;
+use std::ffi::CStr;
+use std::os::raw::{c_char, c_int, c_uint};
 
 const M68K_CPU_TYPE_68010: c_uint = 2;
 
@@ -62,11 +60,10 @@ impl Cpu {
         Cpu { steps, cycles: 0 }
     }
 
-    pub async fn step(&mut self) {
+    pub fn step(&mut self) {
         let cycles = execute(self.steps);
         self.cycles += cycles as u64;
         debug!("<{} cycles completed - step function>", self.cycles);
-        thread::sleep(time::Duration::from_millis(50));
     }
 }
 

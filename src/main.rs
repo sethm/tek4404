@@ -36,14 +36,16 @@ extern crate strum_macros;
 
 use crate::cpu::Cpu;
 use crate::log::*;
-use acia::Acia;
+use acia::{Acia, AciaServer, AciaState};
 
 use std::error::Error;
+use std::sync::{Arc, Mutex, RwLock};
 
 use clap::Clap;
 
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::net::TcpListener;
+use tokio::time::{delay_for, Duration};
 
 #[allow(dead_code)]
 #[derive(Clap)]
@@ -83,16 +85,6 @@ async fn acia_listener() -> Result<(), Box<dyn std::error::Error + Send + Sync>>
     }
 }
 
-async fn run_cpu(cpu: &mut Cpu) {
-    cpu.step().await;
-}
-
-use std::sync::{Arc, RwLock};
-
-async fn do_io(acia: &mut Arc<RwLock<Acia>>) {
-    acia.write().unwrap().do_io().await;
-}
-
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn Error>> {
     let opts: Opts = Opts::parse();
@@ -102,9 +94,23 @@ async fn main() -> Result<(), Box<dyn Error>> {
     info!("INITIALIZING");
 
     let mut cpu = Cpu::new(opts.bootrom.as_str(), opts.steps);
-    let mut acia = bus::BUS.lock().unwrap().acia.clone().unwrap().clone();
+    let acia_state = Arc::new(Mutex::new(AciaState::new()));
+    let acia = Acia::new(acia_state.clone());
+
+    bus::BUS
+        .lock()
+        .unwrap()
+        .set_acia(Arc::new(RwLock::new(acia)));
 
     loop {
-        tokio::join!(run_cpu(&mut cpu), do_io(&mut acia),);
+        tokio::join!(
+            async {
+                loop {
+                    cpu.step();
+                    delay_for(Duration::from_millis(50)).await;
+                }
+            },
+            AciaServer::run(acia_state.clone()),
+        );
     }
 }

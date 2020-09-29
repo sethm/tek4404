@@ -1,4 +1,3 @@
-use crate::acia::*;
 /// Copyright 2020 Seth Morabito <web@loomcom.com>
 ///
 /// Permission is hereby granted, free of charge, to any person
@@ -20,6 +19,7 @@ use crate::acia::*;
 /// WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 /// OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 /// DEALINGS IN THE SOFTWARE.
+use crate::acia::*;
 use crate::cpu;
 use crate::err::*;
 use crate::mem::*;
@@ -101,8 +101,12 @@ impl Bus {
                 Memory::new(DEBUG_RAM_START, DEBUG_RAM_END, DEBUG_RAM_SIZE, false).unwrap(),
             ))),
             sound: Some(Arc::new(RwLock::new(Sound {}))),
-            acia: Some(Arc::new(RwLock::new(Acia::new()))),
+            acia: None,
         }
+    }
+
+    pub fn set_acia(&mut self, acia: AciaDevice) {
+        self.acia = Some(acia);
     }
 
     fn map_device(&mut self, addr: usize) -> Result<BusDevice, BusError> {
