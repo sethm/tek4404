@@ -34,55 +34,45 @@ extern crate lazy_static;
 extern crate strum;
 extern crate strum_macros;
 
-use crate::cpu::Cpu;
-use crate::log::*;
 use acia::{Acia, AciaServer, AciaState};
+use cpu::Cpu;
+use log::*;
+
+use clap::Clap;
+use tokio::time::{delay_for, Duration};
 
 use std::error::Error;
 use std::sync::{Arc, Mutex, RwLock};
 
-use clap::Clap;
-
-use tokio::io::{AsyncReadExt, AsyncWriteExt};
-use tokio::net::TcpListener;
-use tokio::time::{delay_for, Duration};
-
-#[allow(dead_code)]
 #[derive(Clap)]
+#[clap(
+    version = "0.1.0",
+    author = "Seth Morabito <web@loomcom.com>",
+    about = "Tektronix 4404 Emulator"
+)]
 struct Opts {
     #[clap(short, long)]
     bootrom: String,
-    #[clap(short, long, default_value = "100")]
-    steps: u32,
-    #[clap(short, long, default_value = "info")]
+    #[clap(short, long, default_value = "0.0.0.0", about = "Address to bind to")]
+    address: String,
+    #[clap(short, long, default_value = "9090", about = "Port to bind to")]
+    port: String,
+    #[clap(short, long, default_value = "2500", about = "CPU cycles per loop")]
+    cycles: u32,
+    #[clap(
+        short,
+        long,
+        default_value = "20",
+        about = "Idle time between CPU loops (in ms)"
+    )]
+    idle: u64,
+    #[clap(
+        short,
+        long,
+        default_value = "info",
+        about = "Log level [io, trace, debug, info, warn, error]"
+    )]
     loglvl: LogLevel,
-}
-
-#[allow(dead_code)]
-async fn acia_listener() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
-    info!("Spawning Debug ACIA listener on 127.0.0.1:9090");
-    let mut listener = TcpListener::bind("127.0.0.1:9090").await.expect("");
-    loop {
-        let (mut socket, _) = listener.accept().await.expect("");
-        tokio::spawn(async move {
-            let mut buf = [0; 1024];
-            loop {
-                let n = socket
-                    .read(&mut buf)
-                    .await
-                    .expect("failed to read data from socket");
-
-                if n == 0 {
-                    return;
-                }
-
-                socket
-                    .write_all(&buf[0..n])
-                    .await
-                    .expect("failed to write data to socket");
-            }
-        });
-    }
 }
 
 #[tokio::main]
@@ -93,7 +83,7 @@ async fn main() -> Result<(), Box<dyn Error>> {
 
     info!("INITIALIZING");
 
-    let mut cpu = Cpu::new(opts.bootrom.as_str(), opts.steps);
+    let mut cpu = Cpu::new(opts.bootrom.as_str(), opts.cycles);
     let acia_state = Arc::new(Mutex::new(AciaState::new()));
     let acia = Acia::new(acia_state.clone());
 
@@ -107,10 +97,14 @@ async fn main() -> Result<(), Box<dyn Error>> {
             async {
                 loop {
                     cpu.step();
-                    delay_for(Duration::from_millis(50)).await;
+                    delay_for(Duration::from_millis(opts.idle)).await;
                 }
             },
-            AciaServer::run(acia_state.clone()),
+            AciaServer::run(
+                acia_state.clone(),
+                opts.address.as_str(),
+                opts.port.as_str()
+            ),
         );
     }
 }

@@ -105,9 +105,11 @@ impl Future for AciaTransmit {
 pub struct AciaServer {}
 
 impl AciaServer {
-    pub async fn run(state: SharedAciaState) {
-        info!("Spawning listener on 127.0.0.1:9090");
-        let mut listener = TcpListener::bind("127.0.0.1:9090").await.unwrap();
+    pub async fn run(state: SharedAciaState, bind: &str, port: &str) {
+        let addr = format!("{}:{}", bind, port);
+
+        info!("Listening for ACIA debug connections on {}", addr);
+        let mut listener = TcpListener::bind(addr).await.unwrap();
 
         loop {
             let state = state.clone();

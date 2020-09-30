@@ -31,8 +31,14 @@ or, from a built binary:
     $ tek4404 -b ./rom/boot.bin -s 20000 -l info
 
 This enters an infinite CPU execution loop that does 20,000 machine
-cycles on each pass through the loop, with 100ms of idle time between
+cycles on each pass through the loop, with 50ms of idle time between
 executions. To kill the emulator, just use ^C (Control-C).
+
+At the moment, the only peripheral that is emulated is the debug ACIA.
+You can connect to the debug ACIA and issue interactive commands by
+telnetting to localhost, port 9090. This is hard coded right now (and
+unfortunately, the debug ACIA is not well documented, so I don't know
+how most of the commands work!)
 
 # Credits
 
