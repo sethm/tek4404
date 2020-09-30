@@ -140,7 +140,10 @@ impl Bus {
                 Some(d) => Ok(d.clone()),
                 None => Err(BusError::Access),
             },
-            _ => Err(BusError::Access),
+            _ => {
+                error!("No device at address {:08x}", addr);
+                Err(BusError::Access)
+            }
         }
     }
 
