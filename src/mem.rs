@@ -31,7 +31,7 @@ pub struct Memory {
     start_address: usize,
     end_address: usize,
     size: usize,
-    mem: Vec<u8>,
+    pub mem: Vec<u8>,
 }
 
 impl Memory {

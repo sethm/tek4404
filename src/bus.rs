@@ -24,6 +24,7 @@ use crate::cpu;
 use crate::err::*;
 use crate::mem::*;
 use crate::sound::*;
+use crate::video::*;
 
 use std::ops::RangeInclusive;
 use std::os::raw::c_uint;
@@ -47,6 +48,13 @@ pub const SOUND_END: usize = 0x788fff;
 pub const ACIA_START: usize = 0x78c000;
 pub const ACIA_END: usize = 0x78c007;
 
+pub const VIDEO_CTRL_START: usize = 0x784000;
+pub const VIDEO_CTRL_END: usize = 0x785fff;
+
+pub const VIDEO_RAM_START: usize = 0x600000;
+pub const VIDEO_RAM_END: usize = 0x61ffff;
+pub const VIDEO_RAM_SIZE: usize = 0x20000;
+
 // The existence of this global, mutable shared state is unfortunately
 // made necessary by the nature of the C Musashi 68K core library.
 // There must be a global bus available for the extern C functions
@@ -65,6 +73,7 @@ pub type BusDevice = Arc<RwLock<dyn IoDevice + Send + Sync>>;
 pub type MemoryDevice = Arc<RwLock<Memory>>;
 pub type SoundDevice = Arc<RwLock<Sound>>;
 pub type AciaDevice = Arc<RwLock<Acia>>;
+pub type VideoControlDevice = Arc<RwLock<VideoControl>>;
 
 pub struct Bus {
     pub map_rom: bool,
@@ -73,6 +82,8 @@ pub struct Bus {
     pub debug_ram: Option<MemoryDevice>,
     pub sound: Option<SoundDevice>,
     pub acia: Option<AciaDevice>,
+    pub video_ctrl: Option<VideoControlDevice>,
+    pub video_ram: Option<MemoryDevice>,
 }
 
 impl Bus {
@@ -85,6 +96,8 @@ impl Bus {
             debug_ram: None,
             sound: None,
             acia: None,
+            video_ctrl: None,
+            video_ram: None,
         }
     }
 
@@ -100,13 +113,21 @@ impl Bus {
             debug_ram: Some(Arc::new(RwLock::new(
                 Memory::new(DEBUG_RAM_START, DEBUG_RAM_END, DEBUG_RAM_SIZE, false).unwrap(),
             ))),
-            sound: Some(Arc::new(RwLock::new(Sound {}))),
+            sound: Some(Arc::new(RwLock::new(Sound::new()))),
             acia: None,
+            video_ctrl: Some(Arc::new(RwLock::new(VideoControl::new()))),
+            video_ram: Some(Arc::new(RwLock::new(
+                Memory::new(VIDEO_RAM_START, VIDEO_RAM_END, VIDEO_RAM_SIZE, false).unwrap(),
+            ))),
         }
     }
 
     pub fn set_acia(&mut self, acia: AciaDevice) {
         self.acia = Some(acia);
+    }
+
+    pub fn set_video_ram(&mut self, video_ram: MemoryDevice) {
+        self.video_ram = Some(video_ram);
     }
 
     fn map_device(&mut self, addr: usize) -> Result<BusDevice, BusError> {
@@ -137,6 +158,14 @@ impl Bus {
                 None => Err(BusError::Access),
             },
             ACIA_START..=ACIA_END => match &mut self.acia {
+                Some(d) => Ok(d.clone()),
+                None => Err(BusError::Access),
+            },
+            VIDEO_CTRL_START..=VIDEO_CTRL_END => match &mut self.acia {
+                Some(d) => Ok(d.clone()),
+                None => Err(BusError::Access),
+            },
+            VIDEO_RAM_START..=VIDEO_RAM_END => match &mut self.video_ram {
                 Some(d) => Ok(d.clone()),
                 None => Err(BusError::Access),
             },

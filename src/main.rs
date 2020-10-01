@@ -28,6 +28,7 @@ mod cpu;
 mod err;
 mod mem;
 mod sound;
+mod video;
 
 #[macro_use]
 extern crate lazy_static;
@@ -37,12 +38,18 @@ extern crate strum_macros;
 use acia::{Acia, AciaServer, AciaState};
 use cpu::Cpu;
 use log::*;
+use mem::Memory;
 
 use clap::Clap;
 use tokio::time::{delay_for, Duration};
 
 use std::error::Error;
 use std::sync::{Arc, Mutex, RwLock};
+
+use sdl2::event::Event;
+use sdl2::keyboard::Keycode;
+use sdl2::pixels::Color;
+use sdl2::rect::Point;
 
 #[derive(Clap)]
 #[clap(
@@ -83,7 +90,28 @@ async fn main() -> Result<(), Box<dyn Error>> {
 
     info!("INITIALIZING");
 
+    let sdl_context = sdl2::init()?;
+    let video_subsystem = sdl_context.video()?;
+
+    let window = video_subsystem
+        .window("Tektronix 4404", 1024, 1024)
+        .build()
+        .unwrap();
+
+    let mut canvas = window.into_canvas().present_vsync().build().unwrap();
+
+    let mut event_pump = sdl_context.event_pump().unwrap();
+
     let mut cpu = Cpu::new(opts.bootrom.as_str(), opts.cycles);
+    let video_ram = Arc::new(RwLock::new(
+        Memory::new(
+            bus::VIDEO_RAM_START,
+            bus::VIDEO_RAM_END,
+            bus::VIDEO_RAM_START,
+            false,
+        )
+        .unwrap(),
+    ));
     let acia_state = Arc::new(Mutex::new(AciaState::new()));
     let acia = Acia::new(acia_state.clone());
 
@@ -91,6 +119,8 @@ async fn main() -> Result<(), Box<dyn Error>> {
         .lock()
         .unwrap()
         .set_acia(Arc::new(RwLock::new(acia)));
+
+    bus::BUS.lock().unwrap().set_video_ram(video_ram.clone());
 
     loop {
         tokio::join!(
@@ -105,6 +135,45 @@ async fn main() -> Result<(), Box<dyn Error>> {
                 opts.address.as_str(),
                 opts.port.as_str()
             ),
+            async {
+                loop {
+                    for event in event_pump.poll_iter() {
+                        match event {
+                            _ => {
+                                println!("SOME OTHER EVENT");
+                            }
+                        }
+                    }
+
+                    canvas.set_draw_color(Color::RGB(255, 255, 255));
+                    canvas.clear();
+                    canvas.set_draw_color(Color::RGB(0, 0, 0));
+
+                    {
+                        let mut x: i32 = 0;
+                        let mut y: i32 = 0;
+
+                        let vm = &video_ram.read().unwrap().mem;
+
+                        for b in vm {
+                            for i in 0..=7 {
+                                x += 1;
+                                x %= 1024;
+                                if x == 0 {
+                                    y += 1;
+                                    y %= 1024;
+                                }
+                                if (b >> 7 - i) & 1 == 1 {
+                                    canvas.draw_point(Point::new(x, y)).unwrap();
+                                }
+                            }
+                        }
+                    }
+
+                    canvas.present();
+                    delay_for(Duration::from_millis(500)).await;
+                }
+            }
         );
     }
 }

@@ -25,6 +25,10 @@ use crate::err::*;
 pub struct Sound {}
 
 impl Sound {
+    pub fn new() -> Sound {
+        Sound {}
+    }
+    
     /// On initialization, the system comes up with the boot ROM
     /// mapped to all RAM and ROM memory locations. Any write to the
     /// sound chip will un-map the ROM from RAM space.
