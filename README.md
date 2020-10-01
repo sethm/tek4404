@@ -1,7 +1,8 @@
 # About
 
-This is a Tektronix 4404 emulator in the larval stage. There's nothing
-to see here yet.
+The Tektronix 4404, code-named "Pegasus", was a mid-1980s AI
+workstation. Based around the Motorola 68010 CPU, it ran Smalltalk-80,
+supported up to 2 MB of RAM, and had a 45MB hard drive.
 
 # Status
 

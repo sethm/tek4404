@@ -25,6 +25,7 @@ mod log;
 mod acia;
 mod bus;
 mod cpu;
+mod duart;
 mod err;
 mod mem;
 mod sound;
@@ -131,8 +132,12 @@ async fn main() -> Result<(), Box<dyn Error>> {
     let acia_state = Arc::new(Mutex::new(AciaState::new()));
     let acia = Arc::new(RwLock::new(Acia::new(acia_state.clone())));
 
-    bus::BUS.lock().unwrap().set_acia(acia);
-    bus::BUS.lock().unwrap().set_video_ram(video_ram.clone());
+    // Populate the global bus.
+    {
+        let mut bus = bus::BUS.lock().unwrap();
+        bus.set_acia(acia.clone());
+        bus.set_video_ram(video_ram.clone());
+    }
 
     loop {
         tokio::join!(

@@ -25,6 +25,7 @@ use crate::err::*;
 use crate::mem::*;
 use crate::sound::*;
 use crate::video::*;
+use crate::duart::*;
 
 use std::ops::RangeInclusive;
 use std::os::raw::c_uint;
@@ -55,6 +56,9 @@ pub const VIDEO_RAM_START: usize = 0x600000;
 pub const VIDEO_RAM_END: usize = 0x61ffff;
 pub const VIDEO_RAM_SIZE: usize = 0x20000;
 
+pub const DUART_START: usize = 0x7b4000;
+pub const DUART_END: usize = 0x7b5fff;
+
 // The existence of this global, mutable shared state is unfortunately
 // made necessary by the nature of the C Musashi 68K core library.
 // There must be a global bus available for the extern C functions
@@ -74,6 +78,7 @@ pub type MemoryDevice = Arc<RwLock<Memory>>;
 pub type SoundDevice = Arc<RwLock<Sound>>;
 pub type AciaDevice = Arc<RwLock<Acia>>;
 pub type VideoControlDevice = Arc<RwLock<VideoControl>>;
+pub type DuartDevice = Arc<RwLock<Duart>>;
 
 pub struct Bus {
     pub map_rom: bool,
@@ -84,6 +89,7 @@ pub struct Bus {
     pub acia: Option<AciaDevice>,
     pub video_ctrl: Option<VideoControlDevice>,
     pub video_ram: Option<MemoryDevice>,
+    pub duart: Option<DuartDevice>,
 }
 
 impl Bus {
@@ -98,6 +104,7 @@ impl Bus {
             acia: None,
             video_ctrl: None,
             video_ram: None,
+            duart: None,
         }
     }
 
@@ -117,6 +124,7 @@ impl Bus {
             acia: None,
             video_ctrl: Some(Arc::new(RwLock::new(VideoControl::new()))),
             video_ram: None,
+            duart: Some(Arc::new(RwLock::new(Duart::new()))),
         }
     }
 
@@ -164,6 +172,10 @@ impl Bus {
                 None => Err(BusError::Access),
             },
             VIDEO_RAM_START..=VIDEO_RAM_END => match &mut self.video_ram {
+                Some(d) => Ok(d.clone()),
+                None => Err(BusError::Access),
+            },
+            DUART_START..=DUART_END => match &mut self.duart {
                 Some(d) => Ok(d.clone()),
                 None => Err(BusError::Access),
             },
