@@ -1,10 +1,9 @@
 use crate::bus;
-use crate::err::*;
 use crate::bus::*;
+use crate::err::*;
 
 use std::ops::RangeInclusive;
 use std::result::Result;
-
 
 pub struct VideoControl {}
 
@@ -24,22 +23,17 @@ impl IoDevice for VideoControl {
         Ok(0)
     }
 
-    fn read_16(self: &mut Self, _bus: &mut Bus, address: usize) -> Result<u16, crate::err::BusError> {
+    fn read_16(self: &mut Self, _bus: &mut Bus, address: usize) -> Result<u16, BusError> {
         info!("Read 16 (address={:08x})", address);
         Ok(0)
     }
 
-    fn read_32(self: &mut Self, _bus: &mut Bus, address: usize) -> Result<u32, crate::err::BusError> {
+    fn read_32(self: &mut Self, _bus: &mut Bus, address: usize) -> Result<u32, BusError> {
         info!("Read 32 (address={:08x})", address);
         Ok(0)
     }
 
-    fn write_8(
-        self: &mut Self,
-        _bus: &mut Bus,
-        address: usize,
-        value: u8,
-    ) -> Result<(), crate::err::BusError> {
+    fn write_8(self: &mut Self, _bus: &mut Bus, address: usize, value: u8) -> Result<(), BusError> {
         info!("Write 8 (address={:08x} value={:02x})", address, value);
         Ok(())
     }
@@ -49,8 +43,8 @@ impl IoDevice for VideoControl {
         _bus: &mut Bus,
         address: usize,
         value: u16,
-    ) -> Result<(), crate::err::BusError> { 
-        info!("Write 8 (address={:08x} value={:04x})", address, value);
+    ) -> Result<(), BusError> {
+        info!("Write 16 (address={:08x} value={:04x})", address, value);
         Ok(())
     }
 
@@ -59,10 +53,8 @@ impl IoDevice for VideoControl {
         _bus: &mut Bus,
         address: usize,
         value: u32,
-    ) -> Result<(), crate::err::BusError> {
-        info!("Write 8 (address={:08x} value={:08x})", address, value);
+    ) -> Result<(), BusError> {
+        info!("Write 32 (address={:08x} value={:08x})", address, value);
         Ok(())
     }
-
-    fn load(self: &mut Self, _data: &Vec<u8>) {}
 }

@@ -32,7 +32,7 @@ extern "C" {
     pub fn m68k_set_cpu_type(cpu_type: c_uint);
     pub fn m68k_init();
     pub fn m68k_pulse_reset();
-    pub fn m68k_pulse_bus_error();
+    //  pub fn m68k_pulse_bus_error();
     pub fn m68k_execute(num_cycles: c_int) -> c_int;
     pub fn m68k_disassemble(buf: *mut c_char, pc: c_uint, cpu_type: c_uint) -> c_uint;
     pub fn m68k_set_instr_hook_callback(hook: InstructionHook);
@@ -68,10 +68,10 @@ impl Cpu {
 }
 
 pub fn bus_error() {
-    info!("m68k_pulse_bus_error()");
-    unsafe {
-        m68k_pulse_bus_error();
-    }
+    debug!("Bus Error (ignored)");
+    // unsafe {
+    //     m68k_pulse_bus_error();
+    // }
 }
 
 fn init() {

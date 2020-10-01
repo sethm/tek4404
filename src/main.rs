@@ -47,6 +47,7 @@ use tokio::time::{delay_for, Duration};
 use std::error::Error;
 use std::sync::{Arc, Mutex, RwLock};
 
+use sdl2::event::Event;
 use sdl2::pixels::PixelFormatEnum;
 
 #[derive(Clap)]
@@ -80,7 +81,11 @@ struct Opts {
     loglvl: LogLevel,
 }
 
-///  Update the framebuffer vector based on current state of Video RAM
+/// Update the framebuffer vector based on current state of Video RAM
+///
+/// TODO: It makes much more sense to implement a special memory device
+///       for video RAM that reads and writes each pixel as an RGB332 byte,
+///       then we don't need this step.
 fn update_framebuffer(vm: &MemoryDevice, fb: &mut Vec<u8>) {
     let mut index: usize = 0;
     let mem = &vm.read().unwrap().mem;
@@ -88,9 +93,9 @@ fn update_framebuffer(vm: &MemoryDevice, fb: &mut Vec<u8>) {
     for b in mem {
         for i in 0..=7 {
             if (b >> 7 - i) & 1 == 1 {
-                fb[index] = 0x51;
+                fb[index] = 0;
             } else {
-                fb[index] = 0x3f;
+                fb[index] = 255;
             }
             index += 1;
         }
@@ -104,23 +109,6 @@ async fn main() -> Result<(), Box<dyn Error>> {
     log::init(opts.loglvl.clone());
 
     info!("INITIALIZING");
-
-    let sdl_context = sdl2::init()?;
-    let video_subsystem = sdl_context.video()?;
-
-    let window = video_subsystem
-        .window("Tektronix 4404", 1024, 1024)
-        .build()
-        .unwrap();
-
-    let mut fb: Vec<u8> = vec![0; 1024 * 1024];
-    let mut canvas = window.into_canvas().present_vsync().build().unwrap();
-    let texture_creator = canvas.texture_creator();
-    let mut texture = texture_creator
-        .create_texture_target(PixelFormatEnum::RGB332, 1024, 1024)
-        .expect("Unable to create texture");
-
-    let mut event_pump = sdl_context.event_pump().unwrap();
 
     let mut cpu = Cpu::new(opts.bootrom.as_str(), opts.cycles);
     let video_ram = Arc::new(RwLock::new(
@@ -156,12 +144,31 @@ async fn main() -> Result<(), Box<dyn Error>> {
                 opts.port.as_str()
             ),
             async {
+                let sdl_context = sdl2::init().expect("Could not initialize SDL2");
+                let video_subsystem = sdl_context.video().expect("Could not get video subsystem");
+
+                let window = video_subsystem
+                    .window("Tektronix 4404", 1024, 1024)
+                    .build()
+                    .unwrap();
+
+                let mut fb: Vec<u8> = vec![0; 1024 * 1024];
+                let mut canvas = window.into_canvas().present_vsync().build().unwrap();
+                let texture_creator = canvas.texture_creator();
+                let mut texture = texture_creator
+                    .create_texture_target(PixelFormatEnum::RGB332, 1024, 1024)
+                    .expect("Unable to create texture");
+
+                let mut event_pump = sdl_context.event_pump().unwrap();
+
                 loop {
                     for event in event_pump.poll_iter() {
                         match event {
-                            _ => {
-                                println!("SOME OTHER EVENT");
+                            Event::Quit { .. } => {
+                                println!("QUITTING.");
+                                return;
                             }
+                            _ => {}
                         }
                     }
 

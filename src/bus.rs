@@ -48,7 +48,7 @@ pub const SOUND_END: usize = 0x788fff;
 pub const ACIA_START: usize = 0x78c000;
 pub const ACIA_END: usize = 0x78c007;
 
-pub const VIDEO_CTRL_START: usize = 0x784000;
+pub const VIDEO_CTRL_START: usize = 0x782000;
 pub const VIDEO_CTRL_END: usize = 0x785fff;
 
 pub const VIDEO_RAM_START: usize = 0x600000;
@@ -159,7 +159,7 @@ impl Bus {
                 Some(d) => Ok(d.clone()),
                 None => Err(BusError::Access),
             },
-            VIDEO_CTRL_START..=VIDEO_CTRL_END => match &mut self.acia {
+            VIDEO_CTRL_START..=VIDEO_CTRL_END => match &mut self.video_ctrl {
                 Some(d) => Ok(d.clone()),
                 None => Err(BusError::Access),
             },
