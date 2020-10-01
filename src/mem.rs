@@ -293,14 +293,7 @@ mod tests {
     #[test]
     fn test_mirroring() {
         let mut mem = Memory::new(0x0, 0x7fff, 0x1000, false).unwrap();
-        let mut bus = Bus {
-            map_rom: false,
-            rom: None,
-            ram: None,
-            sound: None,
-            acia: None,
-            debug_ram: None,
-        };
+        let mut bus = Bus::empty();
 
         mem.mem[0x100] = 0x01;
         mem.mem[0x101] = 0x02;

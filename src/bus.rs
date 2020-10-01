@@ -116,9 +116,7 @@ impl Bus {
             sound: Some(Arc::new(RwLock::new(Sound::new()))),
             acia: None,
             video_ctrl: Some(Arc::new(RwLock::new(VideoControl::new()))),
-            video_ram: Some(Arc::new(RwLock::new(
-                Memory::new(VIDEO_RAM_START, VIDEO_RAM_END, VIDEO_RAM_SIZE, false).unwrap(),
-            ))),
+            video_ram: None,
         }
     }
 

@@ -36,6 +36,7 @@ extern crate strum;
 extern crate strum_macros;
 
 use acia::{Acia, AciaServer, AciaState};
+use bus::MemoryDevice;
 use cpu::Cpu;
 use log::*;
 use mem::Memory;
@@ -46,10 +47,7 @@ use tokio::time::{delay_for, Duration};
 use std::error::Error;
 use std::sync::{Arc, Mutex, RwLock};
 
-use sdl2::event::Event;
-use sdl2::keyboard::Keycode;
-use sdl2::pixels::Color;
-use sdl2::rect::Point;
+use sdl2::pixels::PixelFormatEnum;
 
 #[derive(Clap)]
 #[clap(
@@ -82,6 +80,23 @@ struct Opts {
     loglvl: LogLevel,
 }
 
+///  Update the framebuffer vector based on current state of Video RAM
+fn update_framebuffer(vm: &MemoryDevice, fb: &mut Vec<u8>) {
+    let mut index: usize = 0;
+    let mem = &vm.read().unwrap().mem;
+
+    for b in mem {
+        for i in 0..=7 {
+            if (b >> 7 - i) & 1 == 1 {
+                fb[index] = 0x51;
+            } else {
+                fb[index] = 0x3f;
+            }
+            index += 1;
+        }
+    }
+}
+
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn Error>> {
     let opts: Opts = Opts::parse();
@@ -98,7 +113,12 @@ async fn main() -> Result<(), Box<dyn Error>> {
         .build()
         .unwrap();
 
+    let mut fb: Vec<u8> = vec![0; 1024 * 1024];
     let mut canvas = window.into_canvas().present_vsync().build().unwrap();
+    let texture_creator = canvas.texture_creator();
+    let mut texture = texture_creator
+        .create_texture_target(PixelFormatEnum::RGB332, 1024, 1024)
+        .expect("Unable to create texture");
 
     let mut event_pump = sdl_context.event_pump().unwrap();
 
@@ -107,7 +127,7 @@ async fn main() -> Result<(), Box<dyn Error>> {
         Memory::new(
             bus::VIDEO_RAM_START,
             bus::VIDEO_RAM_END,
-            bus::VIDEO_RAM_START,
+            bus::VIDEO_RAM_SIZE,
             false,
         )
         .unwrap(),
@@ -145,33 +165,18 @@ async fn main() -> Result<(), Box<dyn Error>> {
                         }
                     }
 
-                    canvas.set_draw_color(Color::RGB(255, 255, 255));
+                    update_framebuffer(&video_ram, &mut fb);
+                    texture
+                        .update(None, &fb, 1024)
+                        .expect("Couldn't copy framebuffer to texture");
+
                     canvas.clear();
-                    canvas.set_draw_color(Color::RGB(0, 0, 0));
-
-                    {
-                        let mut x: i32 = 0;
-                        let mut y: i32 = 0;
-
-                        let vm = &video_ram.read().unwrap().mem;
-
-                        for b in vm {
-                            for i in 0..=7 {
-                                x += 1;
-                                x %= 1024;
-                                if x == 0 {
-                                    y += 1;
-                                    y %= 1024;
-                                }
-                                if (b >> 7 - i) & 1 == 1 {
-                                    canvas.draw_point(Point::new(x, y)).unwrap();
-                                }
-                            }
-                        }
-                    }
-
+                    canvas
+                        .copy(&texture, None, None)
+                        .expect("Couldn't copy texture to canvas.");
                     canvas.present();
-                    delay_for(Duration::from_millis(500)).await;
+
+                    delay_for(Duration::from_millis(33)).await;
                 }
             }
         );
