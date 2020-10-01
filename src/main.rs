@@ -49,6 +49,14 @@ use std::sync::{Arc, Mutex, RwLock};
 
 use sdl2::event::Event;
 use sdl2::pixels::PixelFormatEnum;
+use sdl2::rect::Rect;
+
+// The 4404 framebuffer is 1024x1024 pixels.
+const FB_WIDTH: u32 = 1024;
+const FB_HEIGHT: u32 = 1024;
+// The visible window is a 640x480 view into the framebuffer.
+const WINDOW_WIDTH: u32 = 640;
+const WINDOW_HEIGHT: u32 = 480;
 
 #[derive(Clap)]
 #[clap(
@@ -85,7 +93,7 @@ struct Opts {
 ///
 /// TODO: It makes much more sense to implement a special memory device
 ///       for video RAM that reads and writes each pixel as an RGB332 byte,
-///       then we don't need this step.
+///       then we don't need this expensive step.
 fn update_framebuffer(vm: &MemoryDevice, fb: &mut Vec<u8>) {
     let mut index: usize = 0;
     let mem = &vm.read().unwrap().mem;
@@ -121,13 +129,9 @@ async fn main() -> Result<(), Box<dyn Error>> {
         .unwrap(),
     ));
     let acia_state = Arc::new(Mutex::new(AciaState::new()));
-    let acia = Acia::new(acia_state.clone());
+    let acia = Arc::new(RwLock::new(Acia::new(acia_state.clone())));
 
-    bus::BUS
-        .lock()
-        .unwrap()
-        .set_acia(Arc::new(RwLock::new(acia)));
-
+    bus::BUS.lock().unwrap().set_acia(acia);
     bus::BUS.lock().unwrap().set_video_ram(video_ram.clone());
 
     loop {
@@ -148,15 +152,15 @@ async fn main() -> Result<(), Box<dyn Error>> {
                 let video_subsystem = sdl_context.video().expect("Could not get video subsystem");
 
                 let window = video_subsystem
-                    .window("Tektronix 4404", 1024, 1024)
+                    .window("Tektronix 4404", WINDOW_WIDTH, WINDOW_HEIGHT)
                     .build()
                     .unwrap();
 
-                let mut fb: Vec<u8> = vec![0; 1024 * 1024];
+                let mut fb: Vec<u8> = vec![0; (FB_WIDTH * FB_HEIGHT) as usize];
                 let mut canvas = window.into_canvas().present_vsync().build().unwrap();
                 let texture_creator = canvas.texture_creator();
                 let mut texture = texture_creator
-                    .create_texture_target(PixelFormatEnum::RGB332, 1024, 1024)
+                    .create_texture_target(PixelFormatEnum::RGB332, FB_WIDTH, FB_HEIGHT)
                     .expect("Unable to create texture");
 
                 let mut event_pump = sdl_context.event_pump().unwrap();
@@ -165,8 +169,8 @@ async fn main() -> Result<(), Box<dyn Error>> {
                     for event in event_pump.poll_iter() {
                         match event {
                             Event::Quit { .. } => {
-                                println!("QUITTING.");
-                                return;
+                                info!("Good bye.");
+                                std::process::exit(0);
                             }
                             _ => {}
                         }
@@ -174,15 +178,23 @@ async fn main() -> Result<(), Box<dyn Error>> {
 
                     update_framebuffer(&video_ram, &mut fb);
                     texture
-                        .update(None, &fb, 1024)
+                        .update(None, &fb, FB_WIDTH as usize)
                         .expect("Couldn't copy framebuffer to texture");
 
                     canvas.clear();
                     canvas
-                        .copy(&texture, None, None)
+                        .copy(
+                            &texture,
+                            // TODO: Texture source rectangle will
+                            // actually be controlled by framebuffer
+                            // panning register.
+                            Rect::new(0, 0, WINDOW_WIDTH, WINDOW_HEIGHT),
+                            None,
+                        )
                         .expect("Couldn't copy texture to canvas.");
                     canvas.present();
 
+                    // Aim for 30 fps
                     delay_for(Duration::from_millis(33)).await;
                 }
             }
