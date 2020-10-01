@@ -10,7 +10,7 @@ very young, in active development, and is skeletal.
 
 As you can see, it does not yet work:
 
-![Tektronix 4404 Main Window](/doc/screenshots/tek4404.png?raw=true)
+![Tektronix 4404 Main Window](/doc/screenshots/screenshot.png?raw=true)
 
 # Requirements
 
