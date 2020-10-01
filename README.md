@@ -8,6 +8,15 @@ to see here yet.
 This is a work in progress and completely unusable. The project is
 very young, in active development, and is skeletal.
 
+As you can see, it does not yet work:
+
+![Tektronix 4404 Main Window](/doc/screenshots/tek4404.png?raw=true)
+
+# Requirements
+
+The 4404 emulator uses SDL2, so you'll need SDL2 development libraries
+to build it.
+
 # Usage
 
 ## Tests
@@ -24,21 +33,21 @@ can be run with:
 
 To execute the boot ROM using cargo, type:
 
-    $ cargo run -- -b ./rom/boot.bin -s 20000 -l info
+    $ cargo run -- -b ./rom/boot.bin -s 20000 -i 25 -l info
 
 or, from a built binary:
 
-    $ tek4404 -b ./rom/boot.bin -s 20000 -l info
+    $ tek4404 -b ./rom/boot.bin -s 20000 -i 25 -l info
 
 This enters an infinite CPU execution loop that does 20,000 machine
-cycles on each pass through the loop, with 50ms of idle time between
-executions. To kill the emulator, just use ^C (Control-C).
+cycles on each pass through the loop, with 25ms of idle time between
+executions. To kill the emulator, just use ^C (Control-C) or
+close the main display window.
 
 At the moment, the only peripheral that is emulated is the debug ACIA.
 You can connect to the debug ACIA and issue interactive commands by
-telnetting to localhost, port 9090. This is hard coded right now (and
-unfortunately, the debug ACIA is not well documented, so I don't know
-how most of the commands work!)
+telnetting to localhost, port 9090. You can change the default listening
+address and port with the --address and --port options.
 
 # Credits
 
