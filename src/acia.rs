@@ -31,7 +31,6 @@ use std::pin::Pin;
 use std::sync::{Arc, Mutex};
 use std::task::{Context, Poll, Waker};
 
-use crate::bus;
 use crate::bus::*;
 use crate::err::*;
 
@@ -240,7 +239,7 @@ impl Acia {
 
 impl IoDevice for Acia {
     fn range(&self) -> RangeInclusive<usize> {
-        bus::ACIA_START..=bus::ACIA_END
+        ACIA_START..=ACIA_END
     }
 
     fn read_8(&mut self, _: &mut Bus, address: usize) -> std::result::Result<u8, BusError> {

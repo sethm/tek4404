@@ -24,11 +24,17 @@
 mod log;
 mod acia;
 mod bus;
+mod cal;
 mod cpu;
 mod duart;
 mod err;
+mod fpu;
 mod mem;
+mod mmu;
+mod mouse;
+mod scsi;
 mod sound;
+mod timer;
 mod video;
 
 #[macro_use]
@@ -52,6 +58,7 @@ use sdl2::event::Event;
 use sdl2::pixels::PixelFormatEnum;
 use sdl2::rect::Rect;
 
+const CYCLES_PER_LOOP: i32 = 100;
 // The 4404 framebuffer is 1024x1024 pixels.
 const FB_WIDTH: u32 = 1024;
 const FB_HEIGHT: u32 = 1024;
@@ -72,8 +79,13 @@ struct Opts {
     address: String,
     #[clap(short, long, default_value = "9090", about = "Port to bind to")]
     port: String,
-    #[clap(short, long, default_value = "2500", about = "CPU cycles per loop")]
-    cycles: u32,
+    #[clap(
+        short,
+        long,
+        default_value = "10000",
+        about = "CPU execution steps per loop"
+    )]
+    steps: u32,
     #[clap(
         short,
         long,
@@ -119,15 +131,9 @@ async fn main() -> Result<(), Box<dyn Error>> {
 
     info!("INITIALIZING");
 
-    let mut cpu = Cpu::new(opts.bootrom.as_str(), opts.cycles);
+    let mut cpu = Cpu::new(opts.bootrom.as_str());
     let video_ram = Arc::new(RwLock::new(
-        Memory::new(
-            bus::VIDEO_RAM_START,
-            bus::VIDEO_RAM_END,
-            bus::VIDEO_RAM_SIZE,
-            false,
-        )
-        .unwrap(),
+        Memory::new(bus::VRAM_START, bus::VRAM_END, bus::VRAM_SIZE, false).unwrap(),
     ));
     let acia_state = Arc::new(Mutex::new(AciaState::new()));
     let acia = Arc::new(RwLock::new(Acia::new(acia_state.clone())));
@@ -143,7 +149,9 @@ async fn main() -> Result<(), Box<dyn Error>> {
         tokio::join!(
             async {
                 loop {
-                    cpu.step();
+                    for _ in 0..opts.steps {
+                        cpu.execute(CYCLES_PER_LOOP);
+                    }
                     delay_for(Duration::from_millis(opts.idle)).await;
                 }
             },

@@ -32,19 +32,16 @@ extern "C" {
     pub fn m68k_set_cpu_type(cpu_type: c_uint);
     pub fn m68k_init();
     pub fn m68k_pulse_reset();
-    //  pub fn m68k_pulse_bus_error();
+    pub fn m68k_pulse_bus_error();
     pub fn m68k_execute(num_cycles: c_int) -> c_int;
     pub fn m68k_disassemble(buf: *mut c_char, pc: c_uint, cpu_type: c_uint) -> c_uint;
     pub fn m68k_set_instr_hook_callback(hook: InstructionHook);
 }
 
-pub struct Cpu {
-    pub steps: u32,
-    pub cycles: u64,
-}
+pub struct Cpu {}
 
 impl Cpu {
-    pub fn new(rom_file: &str, steps: u32) -> Self {
+    pub fn new(rom_file: &str) -> Self {
         match bus::load_rom(rom_file) {
             Ok(()) => {
                 info!("Initializing CPU.");
@@ -57,21 +54,20 @@ impl Cpu {
             }
         }
 
-        Cpu { steps, cycles: 0 }
+        Cpu {}
     }
 
-    pub fn step(&mut self) {
-        let cycles = execute(self.steps);
-        self.cycles += cycles as u64;
-        debug!("<{} cycles completed - step function>", self.cycles);
+    pub fn execute(&mut self, cycles: i32) {
+        let _ = unsafe { m68k_execute(cycles as c_int) };
     }
 }
 
 pub fn bus_error() {
-    debug!("Bus Error (ignored)");
-    // unsafe {
-    //     m68k_pulse_bus_error();
-    // }
+    unsafe {
+        info!("Bus Error: BEFORE");
+        m68k_pulse_bus_error();
+        info!("Bus Error: AFTER PULSE");
+    }
 }
 
 fn init() {
@@ -85,14 +81,6 @@ fn init() {
 fn reset() {
     unsafe {
         m68k_pulse_reset();
-    }
-}
-
-pub fn execute(num_cycles: u32) -> u32 {
-    unsafe {
-        let s = m68k_execute(num_cycles as c_int);
-
-        s as u32
     }
 }
 

@@ -22,13 +22,16 @@
 use crate::bus::*;
 use crate::err::*;
 
+use std::ops::RangeInclusive;
+use std::result::Result;
+
 pub struct Sound {}
 
 impl Sound {
     pub fn new() -> Sound {
         Sound {}
     }
-    
+
     /// On initialization, the system comes up with the boot ROM
     /// mapped to all RAM and ROM memory locations. Any write to the
     /// sound chip will un-map the ROM from RAM space.
@@ -41,26 +44,26 @@ impl Sound {
 }
 
 impl IoDevice for Sound {
-    fn range(&self) -> std::ops::RangeInclusive<usize> {
+    fn range(&self) -> RangeInclusive<usize> {
         SOUND_START..=SOUND_END
     }
 
     // This is a write-only device. Reading produces no meaningful result.
-    fn read_8(&mut self, _: &mut Bus, _: usize) -> std::result::Result<u8, BusError> {
+    fn read_8(&mut self, _: &mut Bus, _: usize) -> Result<u8, BusError> {
         Ok(0)
     }
 
     // This is a write-only device. Reading produces no meaningful result.
-    fn read_16(&mut self, _: &mut Bus, _: usize) -> std::result::Result<u16, BusError> {
+    fn read_16(&mut self, _: &mut Bus, _: usize) -> Result<u16, BusError> {
         Ok(0)
     }
 
     // This is a write-only device. Reading produces no meaningful result.
-    fn read_32(&mut self, _: &mut Bus, _: usize) -> std::result::Result<u32, BusError> {
+    fn read_32(&mut self, _: &mut Bus, _: usize) -> Result<u32, BusError> {
         Ok(0)
     }
 
-    fn write_8(&mut self, bus: &mut Bus, _: usize, data: u8) -> std::result::Result<(), BusError> {
+    fn write_8(&mut self, bus: &mut Bus, _: usize, data: u8) -> Result<(), BusError> {
         self.unmap_rom(bus);
         info!("SOUND WRITE: data={:02x}", data);
         Ok(())
@@ -71,7 +74,7 @@ impl IoDevice for Sound {
         bus: &mut Bus,
         _: usize,
         data: u16,
-    ) -> std::result::Result<(), BusError> {
+    ) -> Result<(), BusError> {
         self.unmap_rom(bus);
         info!("SOUND WRITE: data={:04x}", data);
         Ok(())
@@ -82,7 +85,7 @@ impl IoDevice for Sound {
         bus: &mut Bus,
         _: usize,
         data: u32,
-    ) -> std::result::Result<(), BusError> {
+    ) -> Result<(), BusError> {
         self.unmap_rom(bus);
         info!("SOUND WRITE: data={:04x}", data);
         Ok(())

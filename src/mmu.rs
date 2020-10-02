@@ -1,39 +1,38 @@
 use crate::bus::*;
-use crate::err::*;
+use crate::err::BusError;
 
 use std::ops::RangeInclusive;
-use std::result::Result;
 
-pub struct Video {}
+pub struct Mmu {}
 
-impl Video {
+impl Mmu {
     pub fn new() -> Self {
-        Video {}
+        Mmu {}
     }
 }
 
-impl IoDevice for Video {
+impl IoDevice for Mmu {
     fn range(&self) -> RangeInclusive<usize> {
-        VIDEO_START..=VIDEO_END
+        MMU_START..=MMU_END
     }
 
-    fn read_8(&mut self, _bus: &mut Bus, address: usize) -> Result<u8, BusError> {
-        info!("Read 8 (address={:08x})", address);
+    fn read_8(self: &mut Self, _bus: &mut Bus, address: usize) -> Result<u8, BusError> {
+        info!("(READ 8) addr={:08x}", address);
         Ok(0)
     }
 
     fn read_16(self: &mut Self, _bus: &mut Bus, address: usize) -> Result<u16, BusError> {
-        info!("Read 16 (address={:08x})", address);
+        info!("(READ 16) addr={:08x}", address);
         Ok(0)
     }
 
     fn read_32(self: &mut Self, _bus: &mut Bus, address: usize) -> Result<u32, BusError> {
-        info!("Read 32 (address={:08x})", address);
+        info!("(READ 32) addr={:08x}", address);
         Ok(0)
     }
 
     fn write_8(self: &mut Self, _bus: &mut Bus, address: usize, value: u8) -> Result<(), BusError> {
-        info!("Write 8 (address={:08x} value={:02x})", address, value);
+        info!("(WRITE 8) addr={:08x} val={:02x}", address, value);
         Ok(())
     }
 
@@ -43,7 +42,7 @@ impl IoDevice for Video {
         address: usize,
         value: u16,
     ) -> Result<(), BusError> {
-        info!("Write 16 (address={:08x} value={:04x})", address, value);
+        info!("(WRITE 16) addr={:08x} val={:04x}", address, value);
         Ok(())
     }
 
@@ -53,7 +52,7 @@ impl IoDevice for Video {
         address: usize,
         value: u32,
     ) -> Result<(), BusError> {
-        info!("Write 32 (address={:08x} value={:08x})", address, value);
+        info!("(WRITE 32) addr={:08x} val={:08x}", address, value);
         Ok(())
     }
 }

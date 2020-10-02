@@ -20,12 +20,18 @@
 /// OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 /// DEALINGS IN THE SOFTWARE.
 use crate::acia::*;
+use crate::cal::*;
 use crate::cpu;
-use crate::err::*;
-use crate::mem::*;
-use crate::sound::*;
-use crate::video::*;
 use crate::duart::*;
+use crate::err::*;
+use crate::fpu::*;
+use crate::mem::*;
+use crate::mmu::*;
+use crate::mouse::*;
+use crate::scsi::*;
+use crate::sound::*;
+use crate::timer::*;
+use crate::video::*;
 
 use std::ops::RangeInclusive;
 use std::os::raw::c_uint;
@@ -49,15 +55,43 @@ pub const SOUND_END: usize = 0x788fff;
 pub const ACIA_START: usize = 0x78c000;
 pub const ACIA_END: usize = 0x78c007;
 
-pub const VIDEO_CTRL_START: usize = 0x782000;
-pub const VIDEO_CTRL_END: usize = 0x785fff;
+pub const VIDEO_START: usize = 0x782000;
+pub const VIDEO_END: usize = 0x785fff;
 
-pub const VIDEO_RAM_START: usize = 0x600000;
-pub const VIDEO_RAM_END: usize = 0x61ffff;
-pub const VIDEO_RAM_SIZE: usize = 0x20000;
+pub const VRAM_START: usize = 0x600000;
+pub const VRAM_END: usize = 0x61ffff;
+pub const VRAM_SIZE: usize = 0x20000;
 
 pub const DUART_START: usize = 0x7b4000;
 pub const DUART_END: usize = 0x7b5fff;
+
+pub const DIAG_START: usize = 0x7b0000;
+pub const DIAG_END: usize = 0x7b1fff;
+pub const DIAG_SIZE: usize = 0x2000;
+
+pub const FPU_START: usize = 0x78a000;
+pub const FPU_END: usize = 0x78bfff;
+
+pub const MMU_START: usize = 0x780000;
+pub const MMU_END: usize = 0x7800ff;
+
+// The Page Table is a 2Kx16 RAM addressed from 0x800000 to
+// 0xffffff. It is accessible whenever VM is turned off. The page
+// table is indexed by bits 12-22 of the address.
+pub const PT_START: usize = 0x800000;
+pub const PT_END: usize = 0xffffff;
+
+pub const SCSI_START: usize = 0x7bc000;
+pub const SCSI_END: usize = 0x7bffff;
+
+pub const MOUSE_START: usize = 0x7b6000;
+pub const MOUSE_END: usize = 0x7b7fff;
+
+pub const TIMER_START: usize = 0x7b8000;
+pub const TIMER_END: usize = 0x7b9fff;
+
+pub const CAL_START: usize = 0x7ba000;
+pub const CAL_END: usize = 0x7bbfff;
 
 // The existence of this global, mutable shared state is unfortunately
 // made necessary by the nature of the C Musashi 68K core library.
@@ -77,8 +111,14 @@ pub type BusDevice = Arc<RwLock<dyn IoDevice + Send + Sync>>;
 pub type MemoryDevice = Arc<RwLock<Memory>>;
 pub type SoundDevice = Arc<RwLock<Sound>>;
 pub type AciaDevice = Arc<RwLock<Acia>>;
-pub type VideoControlDevice = Arc<RwLock<VideoControl>>;
+pub type VideoDevice = Arc<RwLock<Video>>;
 pub type DuartDevice = Arc<RwLock<Duart>>;
+pub type MmuDevice = Arc<RwLock<Mmu>>;
+pub type FpuDevice = Arc<RwLock<Fpu>>;
+pub type ScsiDevice = Arc<RwLock<Scsi>>;
+pub type MouseDevice = Arc<RwLock<Mouse>>;
+pub type TimerDevice = Arc<RwLock<Timer>>;
+pub type CalendarDevice = Arc<RwLock<Calendar>>;
 
 pub struct Bus {
     pub map_rom: bool,
@@ -87,9 +127,16 @@ pub struct Bus {
     pub debug_ram: Option<MemoryDevice>,
     pub sound: Option<SoundDevice>,
     pub acia: Option<AciaDevice>,
-    pub video_ctrl: Option<VideoControlDevice>,
+    pub video_ctrl: Option<VideoDevice>,
     pub video_ram: Option<MemoryDevice>,
     pub duart: Option<DuartDevice>,
+    pub diag: Option<MemoryDevice>,
+    pub fpu: Option<FpuDevice>,
+    pub mmu: Option<MmuDevice>,
+    pub scsi: Option<ScsiDevice>,
+    pub mouse: Option<MouseDevice>,
+    pub timer: Option<TimerDevice>,
+    pub cal: Option<CalendarDevice>,
 }
 
 impl Bus {
@@ -105,6 +152,13 @@ impl Bus {
             video_ctrl: None,
             video_ram: None,
             duart: None,
+            diag: None,
+            fpu: None,
+            mmu: None,
+            scsi: None,
+            mouse: None,
+            timer: None,
+            cal: None,
         }
     }
 
@@ -122,9 +176,18 @@ impl Bus {
             ))),
             sound: Some(Arc::new(RwLock::new(Sound::new()))),
             acia: None,
-            video_ctrl: Some(Arc::new(RwLock::new(VideoControl::new()))),
+            video_ctrl: Some(Arc::new(RwLock::new(Video::new()))),
             video_ram: None,
             duart: Some(Arc::new(RwLock::new(Duart::new()))),
+            diag: Some(Arc::new(RwLock::new(
+                Memory::new(DIAG_START, DIAG_END, DIAG_SIZE, false).unwrap(),
+            ))),
+            fpu: Some(Arc::new(RwLock::new(Fpu::new()))),
+            mmu: Some(Arc::new(RwLock::new(Mmu::new()))),
+            scsi: Some(Arc::new(RwLock::new(Scsi::new()))),
+            mouse: Some(Arc::new(RwLock::new(Mouse::new()))),
+            timer: Some(Arc::new(RwLock::new(Timer::new()))),
+            cal: Some(Arc::new(RwLock::new(Calendar::new()))),
         }
     }
 
@@ -167,15 +230,47 @@ impl Bus {
                 Some(d) => Ok(d.clone()),
                 None => Err(BusError::Access),
             },
-            VIDEO_CTRL_START..=VIDEO_CTRL_END => match &mut self.video_ctrl {
+            VIDEO_START..=VIDEO_END => match &mut self.video_ctrl {
                 Some(d) => Ok(d.clone()),
                 None => Err(BusError::Access),
             },
-            VIDEO_RAM_START..=VIDEO_RAM_END => match &mut self.video_ram {
+            VRAM_START..=VRAM_END => match &mut self.video_ram {
                 Some(d) => Ok(d.clone()),
                 None => Err(BusError::Access),
             },
             DUART_START..=DUART_END => match &mut self.duart {
+                Some(d) => Ok(d.clone()),
+                None => Err(BusError::Access),
+            },
+            FPU_START..=FPU_END => match &mut self.fpu {
+                Some(d) => Ok(d.clone()),
+                None => Err(BusError::Access),
+            },
+            DIAG_START..=DIAG_END => match &mut self.diag {
+                Some(d) => Ok(d.clone()),
+                None => Err(BusError::Access),
+            },
+            MMU_START..=MMU_END => match &mut self.mmu {
+                Some(d) => Ok(d.clone()),
+                None => Err(BusError::Access),
+            },
+            PT_START..=PT_END => match &mut self.mmu {
+                Some(d) => Ok(d.clone()),
+                None => Err(BusError::Access),
+            },
+            SCSI_START..=SCSI_END => match &mut self.scsi {
+                Some(d) => Ok(d.clone()),
+                None => Err(BusError::Access),
+            },
+            MOUSE_START..=MOUSE_END => match &mut self.mouse {
+                Some(d) => Ok(d.clone()),
+                None => Err(BusError::Access),
+            },
+            TIMER_START..=TIMER_END => match &mut self.timer {
+                Some(d) => Ok(d.clone()),
+                None => Err(BusError::Access),
+            },
+            CAL_START..=CAL_END => match &mut self.cal {
                 Some(d) => Ok(d.clone()),
                 None => Err(BusError::Access),
             },
@@ -318,7 +413,9 @@ pub fn m68k_read_disassembler_32(address: c_uint) -> c_uint {
 
 #[no_mangle]
 pub fn m68k_read_memory_8(address: c_uint) -> c_uint {
-    match BUS.lock().unwrap().read_8(address as usize) {
+    let result = BUS.lock().unwrap().read_8(address as usize);
+
+    match result {
         Ok(byte) => {
             io!("[ READ] [BYTE] {:08x} = {:04x}", address, byte);
             byte as c_uint
@@ -332,7 +429,9 @@ pub fn m68k_read_memory_8(address: c_uint) -> c_uint {
 
 #[no_mangle]
 pub fn m68k_read_memory_16(address: c_uint) -> c_uint {
-    match BUS.lock().unwrap().read_16(address as usize) {
+    let result = BUS.lock().unwrap().read_16(address as usize);
+
+    match result {
         Ok(word) => {
             io!("[ READ] [WORD] {:08x} = {:04x}", address, word);
             word as c_uint
@@ -346,7 +445,9 @@ pub fn m68k_read_memory_16(address: c_uint) -> c_uint {
 
 #[no_mangle]
 pub fn m68k_read_memory_32(address: c_uint) -> c_uint {
-    match BUS.lock().unwrap().read_32(address as usize) {
+    let result = BUS.lock().unwrap().read_32(address as usize);
+
+    match result {
         Ok(long) => {
             io!("[ READ] [LONG] {:08x} = {:08x}", address, long);
             long as c_uint
@@ -361,7 +462,8 @@ pub fn m68k_read_memory_32(address: c_uint) -> c_uint {
 #[no_mangle]
 pub fn m68k_write_memory_8(addr: c_uint, val: c_uint) {
     io!("[WRITE] [BYTE] {:08x} = {:02x}", addr, val);
-    match BUS.lock().unwrap().write_8(addr as usize, val as u8) {
+    let result = BUS.lock().unwrap().write_8(addr as usize, val as u8);
+    match result {
         Ok(()) => {}
         Err(BusError::ReadOnly) => {
             io!("READ-ONLY ERROR");
@@ -373,7 +475,8 @@ pub fn m68k_write_memory_8(addr: c_uint, val: c_uint) {
 #[no_mangle]
 pub fn m68k_write_memory_16(addr: c_uint, val: c_uint) {
     io!("[WRITE] [WORD] {:08x} = {:04x}", addr, val);
-    match BUS.lock().unwrap().write_16(addr as usize, val as u16) {
+    let result = BUS.lock().unwrap().write_16(addr as usize, val as u16);
+    match result {
         Ok(()) => {}
         Err(BusError::ReadOnly) => {
             io!("READ-ONLY ERROR");
@@ -385,7 +488,8 @@ pub fn m68k_write_memory_16(addr: c_uint, val: c_uint) {
 #[no_mangle]
 pub fn m68k_write_memory_32(addr: c_uint, val: c_uint) {
     io!("[WRITE] [LONG] {:08x} = {:08x}", addr, val);
-    match BUS.lock().unwrap().write_32(addr as usize, val as u32) {
+    let result = BUS.lock().unwrap().write_32(addr as usize, val as u32);
+    match result {
         Ok(()) => {}
         Err(BusError::ReadOnly) => {
             io!("READ-ONLY ERROR");
