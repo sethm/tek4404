@@ -1,5 +1,7 @@
 //! Keyboard and RS-232 serial
 
+use sdl2::keyboard::Keycode;
+
 use crate::bus::*;
 use crate::err::*;
 
@@ -135,11 +137,87 @@ pub struct Duart {
 // Output Port 3: Keyboard Reset.
 //
 // Output Port 4: Enable Keyboard Receive. While reading a character
-// from the keyboard, the 4404 asserts OP4 high. The keyboard will
-// not send while OP4 is high.
+// from the keyboard, the 4404 asserts OP4 high. The keyboard will not
+// send while OP4 is high.
 //
 // Input Port 4: Keyboard Ready. The keyboard asserts IP4 HIGH when
 // ready to receive a command.
+
+// TODO: This map is incomplete, and it's been derived by
+// trial-and-error.
+fn map_keycode(k: &Keycode) -> u8 {
+    match *k {
+        Keycode::LShift => 0x01,
+        Keycode::RShift => 0x02,
+        Keycode::Return => 0x05,
+        Keycode::Backspace => 0x06,
+        Keycode::Tab => 0x07,
+        Keycode::Escape => 0x0a,
+        Keycode::Space => 0x0b,
+        Keycode::Quote => 0x0c,
+        Keycode::Comma => 0x0d,
+        Keycode::Minus => 0x0e,
+        Keycode::Period => 0x0f,
+        Keycode::Slash => 0x10,
+        Keycode::Num0 => 0x11,
+        Keycode::Num1 => 0x12,
+        Keycode::Num2 => 0x13,
+        Keycode::Num3 => 0x14,
+        Keycode::Num4 => 0x15,
+        Keycode::Num5 => 0x16,
+        Keycode::Num6 => 0x17,
+        Keycode::Num7 => 0x18,
+        Keycode::Num8 => 0x19,
+        Keycode::Num9 => 0x1a,
+        Keycode::Semicolon => 0x1b,
+        Keycode::Equals => 0x1c,
+        Keycode::A => 0x1d,
+        Keycode::B => 0x1e,
+        Keycode::C => 0x1f,
+        Keycode::D => 0x20,
+        Keycode::E => 0x21,
+        Keycode::F => 0x22,
+        Keycode::G => 0x23,
+        Keycode::H => 0x24,
+        Keycode::I => 0x25,
+        Keycode::J => 0x26,
+        Keycode::K => 0x27,
+        Keycode::L => 0x28,
+        Keycode::M => 0x29,
+        Keycode::N => 0x2a,
+        Keycode::O => 0x2b,
+        Keycode::P => 0x2c,
+        Keycode::Q => 0x2d,
+        Keycode::R => 0x2e,
+        Keycode::S => 0x2f,
+        Keycode::T => 0x30,
+        Keycode::U => 0x31,
+        Keycode::V => 0x32,
+        Keycode::W => 0x33,
+        Keycode::X => 0x34,
+        Keycode::Y => 0x35,
+        Keycode::Z => 0x36,
+        Keycode::LeftBracket => 0x37,
+        Keycode::Backslash => 0x38,
+        Keycode::RightBracket => 0x39,
+        Keycode::Delete => 0x3b,
+        Keycode::KpEnter => 0x3c,
+        Keycode::KpComma => 0x3d,
+        Keycode::KpMinus => 0x3e,
+        Keycode::KpPeriod => 0x3f,
+        Keycode::Kp0 => 0x40,
+        Keycode::Kp1 => 0x41,
+        Keycode::Kp2 => 0x42,
+        Keycode::Kp3 => 0x43,
+        Keycode::Kp4 => 0x44,
+        Keycode::Kp5 => 0x45,
+        Keycode::Kp6 => 0x46,
+        Keycode::Kp7 => 0x47,
+        Keycode::Kp8 => 0x48,
+        Keycode::Kp9 => 0x49,
+        _ => 0x03,
+    }
+}
 
 impl Duart {
     pub fn new() -> Duart {
@@ -152,6 +230,32 @@ impl Duart {
             istat: 0,
             imr: 0,
             ivec: 0,
+        }
+    }
+
+    pub fn key_down(&mut self, k: &Keycode) {
+        let c = map_keycode(k);
+        debug!("Key Down: {:02x}", c);
+        let mut ctx = &mut self.ports[PORT_A];
+
+        if (ctx.conf & CNF_ERX) != 0 {
+            ctx.stat |= STS_RXR;
+            self.istat |= ISTS_RAI;
+            self.ivec |= RX_INT;
+            ctx.rx_queue.push_back(c);
+        }
+    }
+
+    pub fn key_up(&mut self, k: &Keycode) {
+        let c = map_keycode(k) | 0x80;
+        debug!("Key Up: {:02x}", c);
+        let ctx = &mut self.ports[PORT_A];
+
+        if (ctx.conf & CNF_ERX) != 0 {
+            ctx.stat |= STS_RXR;
+            self.istat |= ISTS_RAI;
+            self.ivec |= RX_INT;
+            ctx.rx_queue.push_back(c);
         }
     }
 
@@ -211,7 +315,7 @@ impl Duart {
 
         let mut ctx = &mut self.ports[port];
 
-        info!("DUART: Port {} Command {:02x}", port, cmd);
+        debug!("DUART: Port {} Command {:02x}", port, cmd);
 
         // Enable or disable transmitter
         if cmd & CMD_DTX != 0 {
@@ -277,19 +381,24 @@ impl IoDevice for Duart {
                 let mut ctx = &mut self.ports[PORT_A];
                 let val = ctx.mode[ctx.mode_ptr];
                 ctx.mode_ptr = (ctx.mode_ptr + 1) % 2;
-                info!("DUART(READ): MR12A: val={:02x}", val);
+                debug!("DUART(READ): MR12A: val={:02x}", val);
                 Ok(val)
             }
             CSRA => {
-                info!("DUART(READ): CSRA: val={:02x}", self.ports[PORT_A].stat);
+                debug!("DUART(READ): CSRA: val={:02x}", self.ports[PORT_A].stat);
                 Ok(self.ports[PORT_A].stat)
             }
             THRA => {
                 let mut ctx = &mut self.ports[PORT_A];
-                ctx.stat &= !STS_RXR;
-                self.istat &= !ISTS_RAI;
-                self.ivec &= !RX_INT;
-                info!("DUART(READ): THRA: val={:02x}", ctx.rx_data);
+                if let Some(c) = ctx.rx_queue.pop_back() {
+                    ctx.rx_data = c;
+                }
+                debug!("DUART(READ): THRA: val={:02x}", ctx.rx_data);
+                if ctx.rx_queue.is_empty() {
+                    ctx.stat &= !STS_RXR;
+                    self.istat &= !ISTS_RAI;
+                    self.ivec &= !RX_INT;
+                }
                 Ok(ctx.rx_data)
             }
             IPCR_ACR => {
@@ -297,22 +406,22 @@ impl IoDevice for Duart {
                 self.ipcr &= !0x0f;
                 self.ivec = 0;
                 self.istat &= !ISTS_IPC;
-                info!("DUART(READ): IPCR_ACR: val={:02x}", result);
+                debug!("DUART(READ): IPCR_ACR: val={:02x}", result);
                 Ok(result)
             }
             ISR_MASK => {
-                info!("DUART(READ): ISR_MASK: val={:02x}", self.istat);
+                debug!("DUART(READ): ISR_MASK: val={:02x}", self.istat);
                 Ok(self.istat)
             }
             MR12B => {
                 let mut ctx = &mut self.ports[PORT_B];
                 let val = ctx.mode[ctx.mode_ptr];
                 ctx.mode_ptr = (ctx.mode_ptr + 1) % 2;
-                info!("DUART(READ): MR12B: val={:02x}", val);
+                debug!("DUART(READ): MR12B: val={:02x}", val);
                 Ok(val)
             }
             CSRB => {
-                info!("DUART(READ): CSRB: val={:02x}", self.ports[PORT_B].stat);
+                debug!("DUART(READ): CSRB: val={:02x}", self.ports[PORT_B].stat);
                 Ok(self.ports[PORT_B].stat)
             }
             THRB => {
@@ -320,15 +429,15 @@ impl IoDevice for Duart {
                 ctx.stat &= !STS_RXR;
                 self.istat &= !ISTS_RBI;
                 self.ivec &= !KEYBOARD_INT;
-                info!("DUART(READ): THRB: val={:02x}", ctx.rx_data);
+                debug!("DUART(READ): THRB: val={:02x}", ctx.rx_data);
                 Ok(ctx.rx_data)
             }
             IP_OPCR => {
-                info!("DUART(READ): IP_OPCR: val={:02x}", self.inprt);
+                debug!("DUART(READ): IP_OPCR: val={:02x}", self.inprt);
                 Ok(self.inprt)
             }
             _ => {
-                info!("DUART(READ): Unhandled. addr={:08x}", address);
+                debug!("DUART(READ): Unhandled. addr={:08x}", address);
                 Ok(0)
             }
         }
@@ -340,7 +449,7 @@ impl IoDevice for Duart {
                 let ctx = &self.ports[PORT_A];
                 let lo: u16 = ctx.mode[0] as u16;
                 let hi: u16 = (ctx.mode[1] as u16) << 8;
-                info!("DUART(READ16): MR12A: val={:02x}", hi | lo);
+                debug!("DUART(READ16): MR12A: val={:02x}", hi | lo);
                 Ok(hi | lo)
             }
             _ => {
@@ -356,7 +465,7 @@ impl IoDevice for Duart {
                 let mut ctx = &mut self.ports[PORT_A];
                 ctx.mode[ctx.mode_ptr] = value;
                 ctx.mode_ptr = (ctx.mode_ptr + 1) % 2;
-                info!("DUART(WRITE): MR12A: val={:02x}", value);
+                debug!("DUART(WRITE): MR12A: val={:02x}", value);
             }
             CSRA => {
                 // Set the baud rate.
@@ -368,11 +477,11 @@ impl IoDevice for Duart {
                 };
                 let mut ctx = &mut self.ports[PORT_A];
                 ctx.char_delay = Duration::new(0, delay);
-                info!("DUART(WRITE): CSRA: val={:02x}", value);
+                debug!("DUART(WRITE): CSRA: val={:02x}", value);
             }
             CRA => {
                 self.handle_command(value, PORT_A);
-                info!("DUART(WRITE): CRA: val={:02x}", value);
+                debug!("DUART(WRITE): CRA: val={:02x}", value);
             }
             THRA => {
                 let mut ctx = &mut self.ports[PORT_A];
@@ -383,25 +492,25 @@ impl IoDevice for Duart {
                 ctx.stat &= !(STS_TXE | STS_TXR);
                 self.istat &= !ISTS_TAI;
                 self.ivec &= !TX_INT;
-                info!("DUART(WRITE): THRA: val={:02x}", value);
+                debug!("DUART(WRITE): THRA: val={:02x}", value);
             }
             IPCR_ACR => {
                 self.acr = value;
-                info!("DUART(WRITE): IPCR_ACR: val={:02x}", value);
+                debug!("DUART(WRITE): IPCR_ACR: val={:02x}", value);
             }
             ISR_MASK => {
                 self.imr = value;
-                info!("DUART(WRITE): ISR_MASK: val={:02x}", value);
+                debug!("DUART(WRITE): ISR_MASK: val={:02x}", value);
             }
             MR12B => {
                 let mut ctx = &mut self.ports[PORT_B];
                 ctx.mode[ctx.mode_ptr] = value;
                 ctx.mode_ptr = (ctx.mode_ptr + 1) % 2;
-                info!("DUART(WRITE): MR12B: val={:02x}", value);
+                debug!("DUART(WRITE): MR12B: val={:02x}", value);
             }
             CRB => {
                 self.handle_command(value, PORT_B);
-                info!("DUART(WRITE): CRB: val={:02x}", value);
+                debug!("DUART(WRITE): CRB: val={:02x}", value);
             }
             THRB => {
                 // Keyboard transmit requires special handling,
@@ -417,29 +526,29 @@ impl IoDevice for Duart {
                     self.istat &= !ISTS_TBI;
                 }
 
-                info!("DUART(WRITE): THRB: val={:02x}", value);
+                debug!("DUART(WRITE): THRB: val={:02x}", value);
             }
             IP_OPCR => {
-                info!("DUART(WRITE): IP_OPCR: val={:02x}", value);
+                debug!("DUART(WRITE): IP_OPCR: val={:02x}", value);
             }
             OPBITS_SET => {
                 self.outprt |= value;
-                info!("DUART(WRITE): OPBITS_SET: val={:02x}", value);
+                debug!("DUART(WRITE): OPBITS_SET: val={:02x}", value);
             }
             OPBITS_RESET => {
                 self.outprt &= !value;
-                info!("DUART(WRITE): OPBITS_RESET: val={:02x}", value);
+                debug!("DUART(WRITE): OPBITS_RESET: val={:02x}", value);
                 if value & 0x8 != 0 {
                     // Keyboard Reset.
                     // Transmit something!
-                    info!("KEYBOARD RESET.");
+                    debug!("KEYBOARD RESET.");
                     let mut ctx = &mut self.ports[PORT_A];
                     ctx.rx_data = 0xf0; // Reset
                     ctx.stat |= STS_RXR;
                 }
             }
             _ => {
-                info!(
+                debug!(
                     "DUART(WRITE): UNHANDLED: addr={:08x} val={:02x}",
                     address, value
                 );

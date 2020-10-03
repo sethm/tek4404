@@ -192,7 +192,7 @@ impl Bus {
             acia: None,
             video: None,
             video_ram: None,
-            duart: Some(Arc::new(RwLock::new(Duart::new()))),
+            duart: None,
             diag: Some(Arc::new(RwLock::new(
                 Memory::new(DIAG_START, DIAG_END, DIAG_SIZE, false).unwrap(),
             ))),
@@ -215,6 +215,10 @@ impl Bus {
 
     pub fn set_video_controller(&mut self, video: VideoDevice) {
         self.video = Some(video);
+    }
+
+    pub fn set_duart(&mut self, duart: DuartDevice) {
+        self.duart = Some(duart);
     }
 
     fn map_device(&mut self, addr: usize) -> Result<BusDevice, BusError> {

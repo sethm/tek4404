@@ -54,6 +54,7 @@ extern crate strum_macros;
 use acia::{Acia, AciaServer, AciaState};
 use bus::MemoryDevice;
 use cpu::Cpu;
+use duart::Duart;
 use log::*;
 use mem::Memory;
 use video::Video;
@@ -69,7 +70,7 @@ use sdl2::pixels::PixelFormatEnum;
 use sdl2::rect::Rect;
 
 /// Number of 68010 machine cycles to execute on each CPU step.
-const CYCLES_PER_LOOP: i32 = 100;
+const CYCLES_PER_LOOP: i32 = 60;
 /// Framebuffer width
 const FB_WIDTH: u32 = 1024;
 /// Framebuffer height
@@ -158,6 +159,7 @@ async fn main() -> Result<(), Box<dyn Error>> {
     let acia_state = Arc::new(Mutex::new(AciaState::new()));
     let acia = Arc::new(RwLock::new(Acia::new(acia_state.clone())));
     let video = Arc::new(RwLock::new(Video::new()));
+    let duart = Arc::new(RwLock::new(Duart::new()));
 
     // Populate the global bus (this is done in a block so that
     // the bus lock can be dropped immediately)
@@ -166,6 +168,7 @@ async fn main() -> Result<(), Box<dyn Error>> {
         bus.set_acia(acia.clone());
         bus.set_video_ram(video_ram.clone());
         bus.set_video_controller(video.clone());
+        bus.set_duart(duart.clone());
     }
 
     loop {
@@ -207,6 +210,16 @@ async fn main() -> Result<(), Box<dyn Error>> {
                             Event::Quit { .. } => {
                                 info!("Good bye.");
                                 std::process::exit(0);
+                            }
+                            Event::KeyDown {
+                                keycode: Some(k), ..
+                            } => {
+                                duart.write().unwrap().key_down(&k);
+                            }
+                            Event::KeyUp {
+                                keycode: Some(k), ..
+                            } => {
+                                duart.write().unwrap().key_up(&k);
                             }
                             _ => {}
                         }
