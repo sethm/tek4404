@@ -42,6 +42,18 @@ extern "C" {
 
 pub struct Cpu {}
 
+// TODO: Interrupts.
+//
+// Levels:
+//    1: TIMER
+//    2: DMA
+//    3: SCSI
+//    4: SPARE
+//    5: UART
+//    6: VSYNC
+//    7: DEBUG
+//
+
 impl Cpu {
     pub fn new(rom_file: &str) -> Self {
         match bus::load_rom(rom_file) {

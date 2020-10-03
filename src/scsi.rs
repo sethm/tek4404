@@ -27,6 +27,24 @@ use crate::err::BusError;
 
 use std::ops::RangeInclusive;
 
+const ADDRESS_REG: usize = 0x7bc000;
+
+// NCR 5386 registers
+const DATA_REG_1: usize = 0x7be000;
+const CMND_REG: usize = 0x7be002;
+const CNTRL_REG: usize = 0x7be004;
+const DST_ID_REG: usize = 0x7be006;
+const AUX_STAT_REG: usize = 0x7be008;
+const ID_REG: usize = 0x7be00a;
+const INT_REG: usize = 0x7be00c;
+const SRC_ID_REG: usize = 0x7be00e;
+const DATA_REG_2: usize = 0x7be010;
+const DIAG_STAT_REG: usize = 0x7be012;
+// 014 and 016 not used
+const XFR_H_REG: usize = 0x7be018;
+const XFR_M_REG: usize = 0x7be01a;
+const XFR_L_REG: usize = 0x7be01c;
+
 pub struct Scsi {}
 
 impl Scsi {
@@ -40,19 +58,12 @@ impl IoDevice for Scsi {
         SCSI_START..=SCSI_END
     }
 
-    fn read_8(self: &mut Self, _bus: &mut Bus, _address: usize) -> Result<u8, BusError> {
-        // info!("(READ 8) addr={:08x}", _address);
-        Ok(0)
-    }
-
-    fn read_16(self: &mut Self, _bus: &mut Bus, _address: usize) -> Result<u16, BusError> {
-        // info!("(READ 16) addr={:08x}", _address);
-        Ok(0)
-    }
-
-    fn read_32(self: &mut Self, _bus: &mut Bus, _address: usize) -> Result<u32, BusError> {
-        // info!("(READ 32) addr={:08x}", _address);
-        Ok(0)
+    fn read_8(self: &mut Self, _bus: &mut Bus, address: usize) -> Result<u8, BusError> {
+        info!("(READ 8) addr={:08x}", address);
+        match address {
+            DIAG_STAT_REG => Ok(0x80),
+            _ => Ok(0),
+        }
     }
 
     fn write_8(
@@ -61,27 +72,7 @@ impl IoDevice for Scsi {
         _address: usize,
         _value: u8,
     ) -> Result<(), BusError> {
-        // info!("(WRITE 8) addr={:08x} val={:02x}", _address, _value);
-        Ok(())
-    }
-
-    fn write_16(
-        self: &mut Self,
-        _bus: &mut Bus,
-        _address: usize,
-        _value: u16,
-    ) -> Result<(), BusError> {
-        // info!("(WRITE 16) addr={:08x} val={:04x}", _address, _value);
-        Ok(())
-    }
-
-    fn write_32(
-        self: &mut Self,
-        _bus: &mut Bus,
-        _address: usize,
-        _value: u32,
-    ) -> Result<(), BusError> {
-        // info!("(WRITE 32) addr={:08x} val={:08x}", _address, _value);
+        info!("(WRITE 8) addr={:08x} val={:02x}", _address, _value);
         Ok(())
     }
 }
