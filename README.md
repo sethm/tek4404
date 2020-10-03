@@ -18,6 +18,15 @@ As you can see, it does not yet work:
 The 4404 emulator uses SDL2, so you'll need SDL2 development libraries
 to build it.
 
+# Source Code Rust Docs
+
+Rust Docs can be generated with the command
+
+    $ cargo doc --open
+
+[They are hosted here](https://archives.loomcom.com/rustdoc/tek4404/) as well,
+but these may be out of date, as they are updated manually.
+
 # Usage
 
 ## Tests
