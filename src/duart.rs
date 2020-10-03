@@ -1,3 +1,5 @@
+//! Keyboard and RS-232 serial
+
 use crate::bus::*;
 use crate::err::*;
 

@@ -1,24 +1,27 @@
-/// Copyright 2020 Seth Morabito <web@loomcom.com>
-///
-/// Permission is hereby granted, free of charge, to any person
-/// obtaining a copy of this software and associated documentation
-/// files (the "Software"), to deal in the Software without
-/// restriction, including without limitation the rights to use, copy,
-/// modify, merge, publish, distribute, sublicense, and/or sell copies
-/// of the Software, and to permit persons to whom the Software is
-/// furnished to do so, subject to the following conditions:
-///
-/// The above copyright notice and this permission notice shall be
-/// included in all copies or substantial portions of the Software.
-///
-/// THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,
-/// EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF
-/// MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND
-/// NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT
-/// HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY,
-/// WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-/// OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
-/// DEALINGS IN THE SOFTWARE.
+//! Main memory map and decoding
+//
+// Copyright 2020 Seth Morabito <web@loomcom.com>
+//
+// Permission is hereby granted, free of charge, to any person
+// obtaining a copy of this software and associated documentation
+// files (the "Software"), to deal in the Software without
+// restriction, including without limitation the rights to use, copy,
+// modify, merge, publish, distribute, sublicense, and/or sell copies
+// of the Software, and to permit persons to whom the Software is
+// furnished to do so, subject to the following conditions:
+//
+// The above copyright notice and this permission notice shall be
+// included in all copies or substantial portions of the Software.
+//
+// THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,
+// EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF
+// MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND
+// NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT
+// HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY,
+// WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+// OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+// DEALINGS IN THE SOFTWARE.
+//
 use crate::acia::*;
 use crate::cal::*;
 use crate::cpu;
@@ -99,7 +102,15 @@ pub const CAL_END: usize = 0x7bbfff;
 // that are used to read and write to the bus. In order to prevent
 // deadlocks, however, *only* the extern C functions and a few select
 // helper functions are allowed to lock the bus mutex!
+
 lazy_static! {
+    /// The global memory map, used for dispatching the address bus.
+    ///
+    /// In an ideal world, this would not be a global static. However,
+    /// because the CPU implementation is an FFI interface to C code,
+    /// and that C code links to Rust read and write functions that
+    /// cannot take a refernce to a Bus structure as an argument, the
+    /// memory map must be global and mutable.
     pub static ref BUS: Mutex<Bus> = Mutex::new(Bus::new());
 }
 
@@ -127,7 +138,7 @@ pub struct Bus {
     pub debug_ram: Option<MemoryDevice>,
     pub sound: Option<SoundDevice>,
     pub acia: Option<AciaDevice>,
-    pub video_ctrl: Option<VideoDevice>,
+    pub video: Option<VideoDevice>,
     pub video_ram: Option<MemoryDevice>,
     pub duart: Option<DuartDevice>,
     pub diag: Option<MemoryDevice>,
@@ -143,13 +154,16 @@ impl Bus {
     #[allow(dead_code)]
     pub fn empty() -> Self {
         Bus {
+            /// If true, the ROM is mapped to addresses 000000-1fffff
+            /// and its normal location. If false, RAM is mapped to
+            /// addresses 000000-1fffff.
             map_rom: false,
             rom: None,
             ram: None,
             debug_ram: None,
             sound: None,
             acia: None,
-            video_ctrl: None,
+            video: None,
             video_ram: None,
             duart: None,
             diag: None,
@@ -176,7 +190,7 @@ impl Bus {
             ))),
             sound: Some(Arc::new(RwLock::new(Sound::new()))),
             acia: None,
-            video_ctrl: Some(Arc::new(RwLock::new(Video::new()))),
+            video: None,
             video_ram: None,
             duart: Some(Arc::new(RwLock::new(Duart::new()))),
             diag: Some(Arc::new(RwLock::new(
@@ -197,6 +211,10 @@ impl Bus {
 
     pub fn set_video_ram(&mut self, video_ram: MemoryDevice) {
         self.video_ram = Some(video_ram);
+    }
+
+    pub fn set_video_controller(&mut self, video: VideoDevice) {
+        self.video = Some(video);
     }
 
     fn map_device(&mut self, addr: usize) -> Result<BusDevice, BusError> {
@@ -230,7 +248,7 @@ impl Bus {
                 Some(d) => Ok(d.clone()),
                 None => Err(BusError::Access),
             },
-            VIDEO_START..=VIDEO_END => match &mut self.video_ctrl {
+            VIDEO_START..=VIDEO_END => match &mut self.video {
                 Some(d) => Ok(d.clone()),
                 None => Err(BusError::Access),
             },

@@ -1,25 +1,34 @@
-/// Copyright 2020 Seth Morabito <web@loomcom.com>
-///
-/// Permission is hereby granted, free of charge, to any person
-/// obtaining a copy of this software and associated documentation
-/// files (the "Software"), to deal in the Software without
-/// restriction, including without limitation the rights to use, copy,
-/// modify, merge, publish, distribute, sublicense, and/or sell copies
-/// of the Software, and to permit persons to whom the Software is
-/// furnished to do so, subject to the following conditions:
-///
-/// The above copyright notice and this permission notice shall be
-/// included in all copies or substantial portions of the Software.
-///
-/// THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,
-/// EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF
-/// MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND
-/// NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT
-/// HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY,
-/// WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-/// OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
-/// DEALINGS IN THE SOFTWARE.
-
+//! Tektronix 4404 Emulator.
+//!
+//! # About
+//!
+//! The Tektronix 4404 was a mid 1980s AI workstation that ran Smalltalk-80
+//! and LISP natively. Built around a 68010 CPU, it supported 1-2 MB of RAM,
+//! a 45MB SCSI hard disk, serial and parallel IO, and had a 640x480 bitmapped
+//! display backed by a 1024x1024 pixel 2-bit framebuffer.
+//
+// Copyright 2020 Seth Morabito <web@loomcom.com>
+//
+// Permission is hereby granted, free of charge, to any person
+// obtaining a copy of this software and associated documentation
+// files (the "Software"), to deal in the Software without
+// restriction, including without limitation the rights to use, copy,
+// modify, merge, publish, distribute, sublicense, and/or sell copies
+// of the Software, and to permit persons to whom the Software is
+// furnished to do so, subject to the following conditions:
+//
+// The above copyright notice and this permission notice shall be
+// included in all copies or substantial portions of the Software.
+//
+// THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,
+// EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF
+// MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND
+// NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT
+// HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY,
+// WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+// OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+// DEALINGS IN THE SOFTWARE.
+//
 #[macro_use]
 mod log;
 mod acia;
@@ -47,6 +56,7 @@ use bus::MemoryDevice;
 use cpu::Cpu;
 use log::*;
 use mem::Memory;
+use video::Video;
 
 use clap::Clap;
 use tokio::time::{delay_for, Duration};
@@ -58,14 +68,18 @@ use sdl2::event::Event;
 use sdl2::pixels::PixelFormatEnum;
 use sdl2::rect::Rect;
 
+/// Number of 68010 machine cycles to execute on each CPU step.
 const CYCLES_PER_LOOP: i32 = 100;
-// The 4404 framebuffer is 1024x1024 pixels.
+/// Framebuffer width
 const FB_WIDTH: u32 = 1024;
+/// Framebuffer height
 const FB_HEIGHT: u32 = 1024;
-// The visible window is a 640x480 view into the framebuffer.
+/// Visible window width
 const WINDOW_WIDTH: u32 = 640;
+/// Visible window height
 const WINDOW_HEIGHT: u32 = 480;
 
+/// Clap options parsed from the command line
 #[derive(Clap)]
 #[clap(
     version = "0.1.0",
@@ -73,12 +87,16 @@ const WINDOW_HEIGHT: u32 = 480;
     about = "Tektronix 4404 Emulator"
 )]
 struct Opts {
+    /// The path to the 32KB boot ROM image
     #[clap(short, long)]
     bootrom: String,
+    /// The address to bind the debug ACIA telnet server to
     #[clap(short, long, default_value = "0.0.0.0", about = "Address to bind to")]
     address: String,
+    /// The port to bind the debug ACIA telnet server to
     #[clap(short, long, default_value = "9090", about = "Port to bind to")]
     port: String,
+    /// The number of CPU steps to take on each loop
     #[clap(
         short,
         long,
@@ -86,6 +104,7 @@ struct Opts {
         about = "CPU execution steps per loop"
     )]
     steps: u32,
+    /// The amount of time to idle between loops
     #[clap(
         short,
         long,
@@ -93,20 +112,21 @@ struct Opts {
         about = "Idle time between CPU loops (in ms)"
     )]
     idle: u64,
+    /// The level of logging to display
     #[clap(
         short,
         long,
         default_value = "info",
-        about = "Log level [io, trace, debug, info, warn, error]"
+        about = "Log level [io|trace|debug|info|error|none]"
     )]
     loglvl: LogLevel,
 }
 
 /// Update the framebuffer vector based on current state of Video RAM
-///
-/// TODO: It makes much more sense to implement a special memory device
-///       for video RAM that reads and writes each pixel as an RGB332 byte,
-///       then we don't need this expensive step.
+//
+// TODO: It makes much more sense to implement a special memory device
+//       for video RAM that reads and writes each pixel as an RGB332 byte,
+//       then we don't need this expensive step.
 fn update_framebuffer(vm: &MemoryDevice, fb: &mut Vec<u8>) {
     let mut index: usize = 0;
     let mem = &vm.read().unwrap().mem;
@@ -137,12 +157,15 @@ async fn main() -> Result<(), Box<dyn Error>> {
     ));
     let acia_state = Arc::new(Mutex::new(AciaState::new()));
     let acia = Arc::new(RwLock::new(Acia::new(acia_state.clone())));
+    let video = Arc::new(RwLock::new(Video::new()));
 
-    // Populate the global bus.
+    // Populate the global bus (this is done in a block so that
+    // the bus lock can be dropped immediately)
     {
         let mut bus = bus::BUS.lock().unwrap();
         bus.set_acia(acia.clone());
         bus.set_video_ram(video_ram.clone());
+        bus.set_video_controller(video.clone());
     }
 
     loop {
@@ -200,7 +223,9 @@ async fn main() -> Result<(), Box<dyn Error>> {
                             &texture,
                             // TODO: Texture source rectangle will
                             // actually be controlled by framebuffer
-                            // panning register.
+                            // panning register. It contains a 16-bit
+                            // offset into the VRAM where drawing is
+                            // to begin.
                             Rect::new(0, 0, WINDOW_WIDTH, WINDOW_HEIGHT),
                             None,
                         )
