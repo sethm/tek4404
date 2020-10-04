@@ -2,10 +2,11 @@
 //!
 //! # About
 //!
-//! The Tektronix 4404 was a mid 1980s AI workstation that ran Smalltalk-80
-//! and LISP natively. Built around a 68010 CPU, it supported 1-2 MB of RAM,
-//! a 45MB SCSI hard disk, serial and parallel IO, and had a 640x480 bitmapped
-//! display backed by a 1024x1024 pixel 2-bit framebuffer.
+//! The Tektronix 4404 was a mid 1980s AI workstation that ran
+//! Smalltalk-80 and LISP natively. Built around a 68010 CPU, it
+//! supported 1-2 MB of RAM, a 45MB SCSI hard disk, serial and
+//! parallel IO, and had a 640x480 bitmapped display backed by a
+//! 1024x1024 pixel 2-bit framebuffer.
 //
 // Copyright 2020 Seth Morabito <web@loomcom.com>
 //
@@ -48,6 +49,7 @@ mod video;
 
 #[macro_use]
 extern crate lazy_static;
+extern crate num_derive;
 extern crate strum;
 extern crate strum_macros;
 
@@ -57,10 +59,11 @@ use cpu::Cpu;
 use duart::Duart;
 use log::*;
 use mem::Memory;
+use scsi::Scsi;
 use video::Video;
 
 use clap::Clap;
-use tokio::time::{delay_for, Duration};
+use tokio::time::{delay_for, Duration, Instant};
 
 use std::error::Error;
 use std::sync::{Arc, Mutex, RwLock};
@@ -123,6 +126,30 @@ struct Opts {
     loglvl: LogLevel,
 }
 
+// TODO: This is not a real queue.
+pub struct IntQue {
+    pub ipl: u8,
+    pub when: Instant,
+}
+
+impl IntQue {
+    pub fn new() -> Self {
+        IntQue {
+            ipl: 0,
+            when: Instant::now(),
+        }
+    }
+
+    pub fn ready(&self) -> bool {
+        self.ipl > 0 && Instant::now() > self.when
+    }
+
+    pub fn schedule(&mut self, ipl: u8, delay_us: u64) {
+        self.ipl = ipl;
+        self.when = Instant::now() + Duration::from_micros(delay_us);
+    }
+}
+
 /// Update the framebuffer vector based on current state of Video RAM
 //
 // TODO: It makes much more sense to implement a special memory device
@@ -153,6 +180,7 @@ async fn main() -> Result<(), Box<dyn Error>> {
     info!("INITIALIZING");
 
     let mut cpu = Cpu::new(opts.bootrom.as_str());
+    let int_queue: Arc<Mutex<IntQue>> = Arc::new(Mutex::new(IntQue::new()));
     let video_ram = Arc::new(RwLock::new(
         Memory::new(bus::VRAM_START, bus::VRAM_END, bus::VRAM_SIZE, false).unwrap(),
     ));
@@ -160,6 +188,7 @@ async fn main() -> Result<(), Box<dyn Error>> {
     let acia = Arc::new(RwLock::new(Acia::new(acia_state.clone())));
     let video = Arc::new(RwLock::new(Video::new()));
     let duart = Arc::new(RwLock::new(Duart::new()));
+    let scsi = Arc::new(RwLock::new(Scsi::new(int_queue.clone())));
 
     // Populate the global bus (this is done in a block so that
     // the bus lock can be dropped immediately)
@@ -169,6 +198,7 @@ async fn main() -> Result<(), Box<dyn Error>> {
         bus.set_video_ram(video_ram.clone());
         bus.set_video_controller(video.clone());
         bus.set_duart(duart.clone());
+        bus.set_scsi(scsi.clone());
     }
 
     loop {
@@ -177,6 +207,13 @@ async fn main() -> Result<(), Box<dyn Error>> {
                 loop {
                     for _ in 0..opts.steps {
                         cpu.execute(CYCLES_PER_LOOP);
+                        let mut q = int_queue.lock().unwrap();
+                        if q.ready() {
+                            let ipl = q.ipl;
+                            info!("PROCESSING INTERRUPT LEVEL {}", ipl);
+                            q.ipl = 0;
+                            cpu::set_irq(ipl);
+                        }
                     }
                     delay_for(Duration::from_millis(opts.idle)).await;
                 }

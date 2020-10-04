@@ -198,7 +198,7 @@ impl Bus {
             ))),
             fpu: Some(Arc::new(RwLock::new(Fpu::new()))),
             mmu: Some(Arc::new(RwLock::new(Mmu::new()))),
-            scsi: Some(Arc::new(RwLock::new(Scsi::new()))),
+            scsi: None,
             mouse: Some(Arc::new(RwLock::new(Mouse::new()))),
             timer: Some(Arc::new(RwLock::new(Timer::new()))),
             cal: Some(Arc::new(RwLock::new(Calendar::new()))),
@@ -219,6 +219,10 @@ impl Bus {
 
     pub fn set_duart(&mut self, duart: DuartDevice) {
         self.duart = Some(duart);
+    }
+
+    pub fn set_scsi(&mut self, scsi: ScsiDevice) {
+        self.scsi = Some(scsi);
     }
 
     fn map_device(&mut self, addr: usize) -> Result<BusDevice, BusError> {

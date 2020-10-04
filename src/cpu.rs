@@ -38,6 +38,7 @@ extern "C" {
     pub fn m68k_execute(num_cycles: c_int) -> c_int;
     pub fn m68k_disassemble(buf: *mut c_char, pc: c_uint, cpu_type: c_uint) -> c_uint;
     pub fn m68k_set_instr_hook_callback(hook: InstructionHook);
+    pub fn m68k_set_irq(int_level: c_uint);
 }
 
 pub struct Cpu {}
@@ -76,11 +77,15 @@ impl Cpu {
     }
 }
 
+pub fn set_irq(ipl: u8) {
+    unsafe {
+        m68k_set_irq(ipl as c_uint);
+    }
+}
+
 pub fn bus_error() {
     unsafe {
-        info!("Bus Error: BEFORE");
         m68k_pulse_bus_error();
-        info!("Bus Error: AFTER PULSE");
     }
 }
 
