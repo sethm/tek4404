@@ -25,6 +25,7 @@
 use crate::bus::*;
 use crate::err::*;
 use byteorder::{BigEndian, ByteOrder};
+use std::borrow::Borrow;
 use std::ops::RangeInclusive;
 
 #[allow(dead_code)]
@@ -112,13 +113,12 @@ impl IoDevice for Memory {
         let offset = self.get_offset(bus, address)?;
         if offset & 1 != 0 {
             Err(BusError::Alignment)
+        } else if self.read_only {
+            Err(BusError::ReadOnly)
         } else {
-            if self.read_only {
-                Err(BusError::ReadOnly)
-            } else {
-                let buf = &mut self.mem[offset..=offset + 1];
-                Ok(BigEndian::write_u16(buf, value))
-            }
+            let buf = &mut self.mem[offset..=offset + 1];
+            BigEndian::write_u16(buf, value);
+            Ok(())
         }
     }
 
@@ -126,18 +126,17 @@ impl IoDevice for Memory {
         let offset = self.get_offset(bus, address)?;
         if offset & 1 != 0 {
             Err(BusError::Alignment)
+        } else if self.read_only {
+            Err(BusError::ReadOnly)
         } else {
-            if self.read_only {
-                Err(BusError::ReadOnly)
-            } else {
-                let buf = &mut self.mem[offset..=offset + 3];
-                Ok(BigEndian::write_u32(buf, value))
-            }
+            let buf = &mut self.mem[offset..=offset + 3];
+            BigEndian::write_u32(buf, value);
+            Ok(())
         }
     }
 
-    fn load(&mut self, data: &Vec<u8>) {
-        self.mem.copy_from_slice(data.as_slice());
+    fn load(&mut self, data: &[u8]) {
+        self.mem.copy_from_slice(data.borrow());
     }
 }
 

@@ -90,5 +90,5 @@ impl IoDevice for Calendar {
         Ok(())
     }
 
-    fn load(self: &mut Self, _data: &Vec<u8>) {}
+    fn load(self: &mut Self, _data: &[u8]) {}
 }

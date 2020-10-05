@@ -152,8 +152,8 @@ impl AciaServer {
 
         let (mut reader, mut writer) = socket.into_split();
 
-        let write_state = state.clone();
         let read_state = state.clone();
+        let write_state = state.clone();
 
         tokio::join!(
             async move {
@@ -196,19 +196,16 @@ impl AciaServer {
             },
             async move {
                 let mut buf: [u8; 1] = [0; 1];
-                loop {
-                    while let Ok(c) = AciaTransmit::new(read_state.clone()).await {
-                        info!("<<< output (acia to tcp): sending out {:02x}", c);
-                        buf[0] = c;
-                        if let Err(e) = writer.write_all(&buf).await {
-                            error!("failed to write to socket; err = {:?}", e);
-                            return;
-                        }
+                while let Ok(c) = AciaTransmit::new(read_state.clone()).await {
+                    info!("<<< output (acia to tcp): sending out {:02x}", c);
+                    buf[0] = c;
+                    if let Err(e) = writer.write_all(&buf).await {
+                        error!("failed to write to socket; err = {:?}", e);
+                        return;
                     }
-                    error!("No longer connected...");
-                    read_state.lock().unwrap().connected = false;
-                    return;
                 }
+                error!("No longer connected...");
+                read_state.lock().unwrap().connected = false;
             }
         );
     }

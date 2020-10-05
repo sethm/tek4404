@@ -313,7 +313,8 @@ impl Bus {
             Ok(data) => match &mut self.rom {
                 Some(dev) => {
                     info!("Loaded {} bytes from {}", &data.len(), rom_file);
-                    Ok(dev.write().unwrap().load(&data))
+                    dev.write().unwrap().load(&data);
+                    Ok(())
                 }
                 None => Err(SimError::Init(String::from("Could not load ROM file."))),
             },
@@ -410,7 +411,7 @@ pub trait IoDevice {
 
     // Only memory-like devices may need to load data, wo the default
     // implementation is a no-op.
-    fn load(self: &mut Self, _data: &Vec<u8>) {}
+    fn load(self: &mut Self, _data: &[u8]) {}
 }
 
 #[no_mangle]

@@ -74,7 +74,7 @@ enum Command {
     SelectWithoutAtn = 9,
     Reselect = 10,
     Diagnostic = 11,
-    RxCommand = 12,
+    RxCmd = 12,
     RxData = 13,
     RxMessageOut = 14,
     RxUnspInfoOut = 15,

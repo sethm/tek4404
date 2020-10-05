@@ -132,6 +132,12 @@ pub struct IntQue {
     pub when: Instant,
 }
 
+impl Default for IntQue {
+    fn default() -> Self {
+        IntQue::new()
+    }
+}
+
 impl IntQue {
     pub fn new() -> Self {
         IntQue {
@@ -161,7 +167,7 @@ fn update_framebuffer(vm: &MemoryDevice, fb: &mut Vec<u8>) {
 
     for b in mem {
         for i in 0..=7 {
-            if (b >> 7 - i) & 1 == 1 {
+            if (b >> (7 - i)) & 1 == 1 {
                 fb[index] = 0;
             } else {
                 fb[index] = 255;
