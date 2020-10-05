@@ -39,15 +39,34 @@ can be run with:
 
     $ cargo test
 
-## Boot ROM
+## General Usage
+
+```
+Tektronix 4404 Emulator
+
+USAGE:
+    tek4404 [OPTIONS] --bootrom <bootrom>
+
+FLAGS:
+    -h, --help       Prints help information
+    -V, --version    Prints version information
+
+OPTIONS:
+    -a, --address <address>    Address to bind to [default: 0.0.0.0]
+    -b, --bootrom <bootrom>    The path to the 32KB boot ROM image
+    -i, --idle <idle>          Idle time between CPU loops (in ms) [default: 20]
+    -l, --loglvl <loglvl>      Log level [io|trace|debug|info|error|none] [default: info]
+    -p, --port <port>          Port to bind to [default: 9090]
+    -s, --steps <steps>        CPU execution steps per loop [default: 10000]
+```
 
 To execute the boot ROM using cargo, type:
 
-    $ cargo run -- -b ./rom/boot.bin -s 20000 -i 25 -l info
+    $ cargo run -- -b ./rom/boot.bin -s 20000 -i 5 -l info
 
 or, from a built binary:
 
-    $ tek4404 -b ./rom/boot.bin -s 20000 -i 25 -l info
+    $ tek4404 -b ./rom/boot.bin -s 20000 -i 5 -l info
 
 This enters an infinite CPU execution loop that does 20,000 machine
 cycles on each pass through the loop, with 25ms of idle time between
