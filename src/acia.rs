@@ -201,6 +201,7 @@ impl AciaServer {
                     buf[0] = c;
                     if let Err(e) = writer.write_all(&buf).await {
                         error!("failed to write to socket; err = {:?}", e);
+                        read_state.lock().unwrap().connected = false;
                         return;
                     }
                 }
