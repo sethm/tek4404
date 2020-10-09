@@ -24,8 +24,6 @@
 //
 use crate::bus::*;
 
-use std::ops::RangeInclusive;
-
 pub struct Calendar {}
 
 impl Calendar {
@@ -35,10 +33,6 @@ impl Calendar {
 }
 
 impl IoDevice for Calendar {
-    fn range(&self) -> RangeInclusive<usize> {
-        CAL_START..=CAL_END
-    }
-
     fn read_8(
         self: &mut Self,
         _bus: &mut Bus,
@@ -89,6 +83,4 @@ impl IoDevice for Calendar {
     ) -> Result<(), crate::err::BusError> {
         Ok(())
     }
-
-    fn load(self: &mut Self, _data: &[u8]) {}
 }

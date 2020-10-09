@@ -43,6 +43,7 @@ mod mem;
 mod mmu;
 mod mouse;
 mod scsi;
+mod service;
 mod sound;
 mod timer;
 mod video;
@@ -54,26 +55,27 @@ extern crate strum;
 extern crate strum_macros;
 
 use acia::{Acia, AciaServer, AciaState};
-use bus::MemoryDevice;
+use bus::*;
 use cpu::Cpu;
 use duart::Duart;
 use log::*;
 use mem::Memory;
 use scsi::Scsi;
+use service::{ServiceKey, ServiceQueue};
 use video::Video;
 
 use clap::Clap;
-use tokio::time::{delay_for, Duration, Instant};
+use tokio::time::{delay_for, Duration};
 
 use std::error::Error;
-use std::sync::{Arc, Mutex, RwLock};
+use std::sync::{Arc, Mutex};
 
 use sdl2::event::Event;
 use sdl2::pixels::PixelFormatEnum;
 use sdl2::rect::Rect;
 
 /// Number of 68010 machine cycles to execute on each CPU step.
-const CYCLES_PER_LOOP: i32 = 60;
+const CYCLES_PER_LOOP: i32 = 250;
 /// Framebuffer width
 const FB_WIDTH: u32 = 1024;
 /// Framebuffer height
@@ -85,14 +87,10 @@ const WINDOW_HEIGHT: u32 = 480;
 
 /// Clap options parsed from the command line
 #[derive(Clap)]
-#[clap(
-    version = "0.1.0",
-    author = "Seth Morabito <web@loomcom.com>",
-    about = "Tektronix 4404 Emulator"
-)]
+#[clap(about = "Tektronix 4404 Emulator")]
 struct Opts {
     /// The path to the 32KB boot ROM image
-    #[clap(short, long)]
+    #[clap(short, long, default_value = "rom/boot.bin")]
     bootrom: String,
     /// The address to bind the debug ACIA telnet server to
     #[clap(short, long, default_value = "0.0.0.0", about = "Address to bind to")]
@@ -104,7 +102,7 @@ struct Opts {
     #[clap(
         short,
         long,
-        default_value = "10000",
+        default_value = "30000",
         about = "CPU execution steps per loop"
     )]
     steps: u32,
@@ -112,7 +110,7 @@ struct Opts {
     #[clap(
         short,
         long,
-        default_value = "20",
+        default_value = "2",
         about = "Idle time between CPU loops (in ms)"
     )]
     idle: u64,
@@ -126,36 +124,6 @@ struct Opts {
     loglvl: LogLevel,
 }
 
-// TODO: This is not a real queue.
-pub struct IntQue {
-    pub ipl: u8,
-    pub when: Instant,
-}
-
-impl Default for IntQue {
-    fn default() -> Self {
-        IntQue::new()
-    }
-}
-
-impl IntQue {
-    pub fn new() -> Self {
-        IntQue {
-            ipl: 0,
-            when: Instant::now(),
-        }
-    }
-
-    pub fn ready(&self) -> bool {
-        self.ipl > 0 && Instant::now() > self.when
-    }
-
-    pub fn schedule(&mut self, ipl: u8, delay_us: u64) {
-        self.ipl = ipl;
-        self.when = Instant::now() + Duration::from_micros(delay_us);
-    }
-}
-
 /// Update the framebuffer vector based on current state of Video RAM
 //
 // TODO: It makes much more sense to implement a special memory device
@@ -163,7 +131,7 @@ impl IntQue {
 //       then we don't need this expensive step.
 fn update_framebuffer(vm: &MemoryDevice, fb: &mut Vec<u8>) {
     let mut index: usize = 0;
-    let mem = &vm.read().unwrap().mem;
+    let mem = &vm.lock().unwrap().mem;
 
     for b in mem {
         for i in 0..=7 {
@@ -185,27 +153,47 @@ async fn main() -> Result<(), Box<dyn Error>> {
 
     info!("INITIALIZING");
 
-    let mut cpu = Cpu::new(opts.bootrom.as_str());
-    let int_queue: Arc<Mutex<IntQue>> = Arc::new(Mutex::new(IntQue::new()));
-    let video_ram = Arc::new(RwLock::new(
-        Memory::new(bus::VRAM_START, bus::VRAM_END, bus::VRAM_SIZE, false).unwrap(),
+    let service_queue = Arc::new(Mutex::new(ServiceQueue::new()));
+
+    // Load the ROM boot file.
+    let rom = Arc::new(Mutex::new(
+        Memory::new(ROM_START, ROM_END, ROM_SIZE, true).unwrap(),
+    ));
+    let data = std::fs::read(opts.bootrom.as_str())?;
+    rom.lock().unwrap().load(&data);
+
+    // Create RAM and other devices, and populate the bus.
+    let ram = Arc::new(Mutex::new(
+        Memory::new(RAM_START, RAM_END, RAM_SIZE, false).unwrap(),
+    ));
+    let video_ram = Arc::new(Mutex::new(
+        Memory::new(VRAM_START, VRAM_END, VRAM_SIZE, false).unwrap(),
     ));
     let acia_state = Arc::new(Mutex::new(AciaState::new()));
-    let acia = Arc::new(RwLock::new(Acia::new(acia_state.clone())));
-    let video = Arc::new(RwLock::new(Video::new()));
-    let duart = Arc::new(RwLock::new(Duart::new()));
-    let scsi = Arc::new(RwLock::new(Scsi::new(int_queue.clone())));
+    let acia = Arc::new(Mutex::new(Acia::new(acia_state.clone())));
+    let video = Arc::new(Mutex::new(Video::new()));
+    let duart = Arc::new(Mutex::new(Duart::new()));
+    let scsi = Arc::new(Mutex::new(Scsi::new()));
 
     // Populate the global bus (this is done in a block so that
     // the bus lock can be dropped immediately)
     {
-        let mut bus = bus::BUS.lock().unwrap();
-        bus.set_acia(acia.clone());
-        bus.set_video_ram(video_ram.clone());
-        bus.set_video_controller(video.clone());
-        bus.set_duart(duart.clone());
-        bus.set_scsi(scsi.clone());
+        let mut bus = BUS.lock().unwrap();
+        // The bus can own these devices
+        bus.rom = Some(rom);
+        bus.ram = Some(ram);
+        bus.video = Some(video);
+
+        // The bus must share these devices
+        bus.acia = Some(acia.clone());
+        bus.video_ram = Some(video_ram.clone());
+        bus.duart = Some(duart.clone());
+        bus.scsi = Some(scsi.clone());
+
+        bus.service_queue = Some(service_queue.clone());
     }
+
+    let mut cpu = Cpu::new();
 
     loop {
         tokio::join!(
@@ -213,14 +201,16 @@ async fn main() -> Result<(), Box<dyn Error>> {
                 loop {
                     for _ in 0..opts.steps {
                         cpu.execute(CYCLES_PER_LOOP);
-                        let mut q = int_queue.lock().unwrap();
-                        if q.ready() {
-                            let ipl = q.ipl;
-                            info!("PROCESSING INTERRUPT LEVEL {}", ipl);
-                            q.ipl = 0;
-                            cpu::set_irq(ipl);
+                    }
+
+                    while let Some(srq) = service_queue.lock().unwrap().take() {
+                        // SERVICE IT!
+                        info!("SERVICING REQUEST FOR: {:?}...", srq.key);
+                        match srq.key {
+                            ServiceKey::Scsi => scsi.lock().unwrap().service(),
                         }
                     }
+
                     delay_for(Duration::from_millis(opts.idle)).await;
                 }
             },
@@ -257,12 +247,12 @@ async fn main() -> Result<(), Box<dyn Error>> {
                             Event::KeyDown {
                                 keycode: Some(k), ..
                             } => {
-                                duart.write().unwrap().key_down(&k);
+                                duart.lock().unwrap().key_down(&k);
                             }
                             Event::KeyUp {
                                 keycode: Some(k), ..
                             } => {
-                                duart.write().unwrap().key_up(&k);
+                                duart.lock().unwrap().key_up(&k);
                             }
                             _ => {}
                         }

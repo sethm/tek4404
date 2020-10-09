@@ -21,8 +21,6 @@
 // WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 // DEALINGS IN THE SOFTWARE.
-use crate::bus;
-use crate::err::SimError;
 use std::ffi::CStr;
 use std::os::raw::{c_char, c_int, c_uint};
 
@@ -56,19 +54,9 @@ pub struct Cpu {}
 //
 
 impl Cpu {
-    pub fn new(rom_file: &str) -> Self {
-        match bus::load_rom(rom_file) {
-            Ok(()) => {
-                info!("Initializing CPU.");
-                init();
-                info!("Resetting CPU.");
-                reset();
-            }
-            Err(SimError::Init(msg)) => {
-                panic!(msg);
-            }
-        }
-
+    pub fn new() -> Self {
+        init();
+        reset();
         Cpu {}
     }
 

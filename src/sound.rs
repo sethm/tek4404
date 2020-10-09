@@ -25,7 +25,6 @@
 use crate::bus::*;
 use crate::err::*;
 
-use std::ops::RangeInclusive;
 use std::result::Result;
 
 pub struct Sound {}
@@ -47,10 +46,6 @@ impl Sound {
 }
 
 impl IoDevice for Sound {
-    fn range(&self) -> RangeInclusive<usize> {
-        SOUND_START..=SOUND_END
-    }
-
     // This is a write-only device. Reading produces no meaningful result.
     fn read_8(&mut self, _: &mut Bus, _: usize) -> Result<u8, BusError> {
         Ok(0)

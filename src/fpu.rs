@@ -25,8 +25,6 @@
 
 use crate::bus::*;
 
-use std::ops::RangeInclusive;
-
 pub struct Fpu {}
 
 impl Fpu {
@@ -35,8 +33,4 @@ impl Fpu {
     }
 }
 
-impl IoDevice for Fpu {
-    fn range(&self) -> RangeInclusive<usize> {
-        FPU_START..=FPU_END
-    }
-}
+impl IoDevice for Fpu {}

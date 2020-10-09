@@ -28,7 +28,6 @@ use tokio::net::{TcpListener, TcpStream};
 
 use std::future::Future;
 use std::net::{Shutdown, SocketAddr};
-use std::ops::RangeInclusive;
 use std::pin::Pin;
 use std::sync::{Arc, Mutex};
 use std::task::{Context, Poll, Waker};
@@ -238,10 +237,6 @@ impl Acia {
 }
 
 impl IoDevice for Acia {
-    fn range(&self) -> RangeInclusive<usize> {
-        ACIA_START..=ACIA_END
-    }
-
     fn read_8(&mut self, _: &mut Bus, address: usize) -> std::result::Result<u8, BusError> {
         let result = match address {
             DATA_REG => {

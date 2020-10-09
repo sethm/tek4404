@@ -6,7 +6,6 @@ use crate::bus::*;
 use crate::err::*;
 
 use std::collections::VecDeque;
-use std::ops::RangeInclusive;
 use std::result::Result;
 use std::time::Duration;
 
@@ -371,10 +370,6 @@ impl Duart {
 }
 
 impl IoDevice for Duart {
-    fn range(&self) -> RangeInclusive<usize> {
-        DUART_START..=DUART_END
-    }
-
     fn read_8(&mut self, _bus: &mut Bus, address: usize) -> Result<u8, BusError> {
         match address {
             MR12A => {

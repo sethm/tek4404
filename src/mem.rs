@@ -26,7 +26,6 @@ use crate::bus::*;
 use crate::err::*;
 use byteorder::{BigEndian, ByteOrder};
 use std::borrow::Borrow;
-use std::ops::RangeInclusive;
 
 #[allow(dead_code)]
 #[derive(Debug)]
@@ -61,19 +60,19 @@ impl Memory {
     fn get_offset(&self, bus: &mut Bus, address: usize) -> Result<usize, BusError> {
         if self.read_only && bus.map_rom {
             Ok(address % self.size)
-        } else if self.range().contains(&address) {
+        } else if address >= self.start_address && address <= self.end_address {
             Ok((address - self.start_address) % self.size)
         } else {
             Err(BusError::Access)
         }
     }
+
+    pub fn load(&mut self, data: &[u8]) {
+        self.mem.copy_from_slice(data.borrow());
+    }
 }
 
 impl IoDevice for Memory {
-    fn range(&self) -> RangeInclusive<usize> {
-        self.start_address..=self.end_address
-    }
-
     fn read_8(&mut self, bus: &mut Bus, address: usize) -> std::result::Result<u8, BusError> {
         let offset = self.get_offset(bus, address)?;
         Ok(self.mem[offset])
@@ -134,10 +133,6 @@ impl IoDevice for Memory {
             Ok(())
         }
     }
-
-    fn load(&mut self, data: &[u8]) {
-        self.mem.copy_from_slice(data.borrow());
-    }
 }
 
 #[cfg(test)]
@@ -150,7 +145,7 @@ mod tests {
         T: FnOnce(&mut Memory, &mut Bus) -> () + panic::UnwindSafe,
     {
         let mut mem = Memory::new(0x1000, 0xffff, 0xefff, false).unwrap();
-        let mut bus = Bus::empty();
+        let mut bus = Bus::new();
 
         test(&mut mem, &mut bus);
     }
@@ -295,7 +290,7 @@ mod tests {
     #[test]
     fn test_mirroring() {
         let mut mem = Memory::new(0x0, 0x7fff, 0x1000, false).unwrap();
-        let mut bus = Bus::empty();
+        let mut bus = Bus::new();
 
         mem.mem[0x100] = 0x01;
         mem.mem[0x101] = 0x02;

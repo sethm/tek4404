@@ -24,8 +24,6 @@
 //
 use crate::bus::*;
 
-use std::ops::RangeInclusive;
-
 pub struct Timer {}
 
 impl Timer {
@@ -34,8 +32,4 @@ impl Timer {
     }
 }
 
-impl IoDevice for Timer {
-    fn range(&self) -> RangeInclusive<usize> {
-        TIMER_START..=TIMER_END
-    }
-}
+impl IoDevice for Timer {}

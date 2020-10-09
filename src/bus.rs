@@ -32,13 +32,14 @@ use crate::mem::*;
 use crate::mmu::*;
 use crate::mouse::*;
 use crate::scsi::*;
+use crate::service::*;
 use crate::sound::*;
 use crate::timer::*;
 use crate::video::*;
 
-use std::ops::RangeInclusive;
 use std::os::raw::c_uint;
-use std::sync::{Arc, Mutex, RwLock};
+use std::sync::{Arc, Mutex};
+use tokio::time::Duration;
 
 pub const ROM_START: usize = 0x740000;
 pub const ROM_END: usize = 0x74ffff;
@@ -114,25 +115,22 @@ lazy_static! {
     pub static ref BUS: Mutex<Bus> = Mutex::new(Bus::new());
 }
 
-pub fn load_rom(boot_rom: &str) -> Result<(), SimError> {
-    BUS.lock().unwrap().load_rom(boot_rom)
-}
-
-pub type BusDevice = Arc<RwLock<dyn IoDevice + Send + Sync>>;
-pub type MemoryDevice = Arc<RwLock<Memory>>;
-pub type SoundDevice = Arc<RwLock<Sound>>;
-pub type AciaDevice = Arc<RwLock<Acia>>;
-pub type VideoDevice = Arc<RwLock<Video>>;
-pub type DuartDevice = Arc<RwLock<Duart>>;
-pub type MmuDevice = Arc<RwLock<Mmu>>;
-pub type FpuDevice = Arc<RwLock<Fpu>>;
-pub type ScsiDevice = Arc<RwLock<Scsi>>;
-pub type MouseDevice = Arc<RwLock<Mouse>>;
-pub type TimerDevice = Arc<RwLock<Timer>>;
-pub type CalendarDevice = Arc<RwLock<Calendar>>;
+pub type BusDevice = Arc<Mutex<dyn IoDevice + Send + Sync>>;
+pub type MemoryDevice = Arc<Mutex<Memory>>;
+pub type SoundDevice = Arc<Mutex<Sound>>;
+pub type AciaDevice = Arc<Mutex<Acia>>;
+pub type VideoDevice = Arc<Mutex<Video>>;
+pub type DuartDevice = Arc<Mutex<Duart>>;
+pub type MmuDevice = Arc<Mutex<Mmu>>;
+pub type FpuDevice = Arc<Mutex<Fpu>>;
+pub type ScsiDevice = Arc<Mutex<Scsi>>;
+pub type MouseDevice = Arc<Mutex<Mouse>>;
+pub type TimerDevice = Arc<Mutex<Timer>>;
+pub type CalendarDevice = Arc<Mutex<Calendar>>;
 
 pub struct Bus {
     pub map_rom: bool,
+    pub service_queue: Option<Arc<Mutex<ServiceQueue>>>,
     pub rom: Option<MemoryDevice>,
     pub ram: Option<MemoryDevice>,
     pub debug_ram: Option<MemoryDevice>,
@@ -151,86 +149,40 @@ pub struct Bus {
 }
 
 impl Bus {
-    #[allow(dead_code)]
-    pub fn empty() -> Self {
-        Bus {
-            /// If true, the ROM is mapped to addresses 000000-1fffff
-            /// and its normal location. If false, RAM is mapped to
-            /// addresses 000000-1fffff.
-            map_rom: false,
-            rom: None,
-            ram: None,
-            debug_ram: None,
-            sound: None,
-            acia: None,
-            video: None,
-            video_ram: None,
-            duart: None,
-            diag: None,
-            fpu: None,
-            mmu: None,
-            scsi: None,
-            mouse: None,
-            timer: None,
-            cal: None,
-        }
-    }
-
     pub fn new() -> Self {
         Bus {
             map_rom: true,
-            rom: Some(Arc::new(RwLock::new(
-                Memory::new(ROM_START, ROM_END, ROM_SIZE, true).unwrap(),
-            ))),
-            ram: Some(Arc::new(RwLock::new(
-                Memory::new(RAM_START, RAM_END, RAM_SIZE, false).unwrap(),
-            ))),
-            debug_ram: Some(Arc::new(RwLock::new(
+            service_queue: None,
+            rom: None,
+            ram: None,
+            debug_ram: Some(Arc::new(Mutex::new(
                 Memory::new(DEBUG_RAM_START, DEBUG_RAM_END, DEBUG_RAM_SIZE, false).unwrap(),
             ))),
-            sound: Some(Arc::new(RwLock::new(Sound::new()))),
+            sound: Some(Arc::new(Mutex::new(Sound::new()))),
             acia: None,
             video: None,
             video_ram: None,
             duart: None,
-            diag: Some(Arc::new(RwLock::new(
+            diag: Some(Arc::new(Mutex::new(
                 Memory::new(DIAG_START, DIAG_END, DIAG_SIZE, false).unwrap(),
             ))),
-            fpu: Some(Arc::new(RwLock::new(Fpu::new()))),
-            mmu: Some(Arc::new(RwLock::new(Mmu::new()))),
+            fpu: Some(Arc::new(Mutex::new(Fpu::new()))),
+            mmu: Some(Arc::new(Mutex::new(Mmu::new()))),
             scsi: None,
-            mouse: Some(Arc::new(RwLock::new(Mouse::new()))),
-            timer: Some(Arc::new(RwLock::new(Timer::new()))),
-            cal: Some(Arc::new(RwLock::new(Calendar::new()))),
+            mouse: Some(Arc::new(Mutex::new(Mouse::new()))),
+            timer: Some(Arc::new(Mutex::new(Timer::new()))),
+            cal: Some(Arc::new(Mutex::new(Calendar::new()))),
         }
     }
 
-    pub fn set_acia(&mut self, acia: AciaDevice) {
-        self.acia = Some(acia);
-    }
-
-    pub fn set_video_ram(&mut self, video_ram: MemoryDevice) {
-        self.video_ram = Some(video_ram);
-    }
-
-    pub fn set_video_controller(&mut self, video: VideoDevice) {
-        self.video = Some(video);
-    }
-
-    pub fn set_duart(&mut self, duart: DuartDevice) {
-        self.duart = Some(duart);
-    }
-
-    pub fn set_scsi(&mut self, scsi: ScsiDevice) {
-        self.scsi = Some(scsi);
+    pub fn schedule(&self, key: ServiceKey, delay: Duration) {
+        if let Some(queue) = &self.service_queue {
+            queue.lock().unwrap().schedule(key, delay);
+        }
     }
 
     fn map_device(&mut self, addr: usize) -> Result<BusDevice, BusError> {
         match addr {
-            ROM_START..=ROM_END => match &mut self.rom {
-                Some(d) => Ok(d.clone()),
-                None => Err(BusError::Access),
-            },
             RAM_START..=RAM_END => {
                 if self.map_rom {
                     match &mut self.rom {
@@ -244,6 +196,10 @@ impl Bus {
                     }
                 }
             }
+            ROM_START..=ROM_END => match &mut self.rom {
+                Some(d) => Ok(d.clone()),
+                None => Err(BusError::Access),
+            },
             DEBUG_RAM_START..=DEBUG_RAM_END => match &mut self.debug_ram {
                 Some(d) => Ok(d.clone()),
                 None => Err(BusError::Access),
@@ -307,67 +263,50 @@ impl Bus {
         }
     }
 
-    fn load_rom(&mut self, rom_file: &str) -> Result<(), SimError> {
-        let result = std::fs::read(rom_file);
-        match result {
-            Ok(data) => match &mut self.rom {
-                Some(dev) => {
-                    info!("Loaded {} bytes from {}", &data.len(), rom_file);
-                    dev.write().unwrap().load(&data);
-                    Ok(())
-                }
-                None => Err(SimError::Init(String::from("Could not load ROM file."))),
-            },
-            Err(_) => Err(SimError::Init(String::from("Could not load ROM file."))),
-        }
-    }
-
     fn read_8(&mut self, address: usize) -> Result<u8, BusError> {
         self.map_device(address)?
-            .write()
+            .lock()
             .unwrap()
             .read_8(self, address)
     }
 
     fn read_16(&mut self, address: usize) -> Result<u16, BusError> {
         self.map_device(address)?
-            .write()
+            .lock()
             .unwrap()
             .read_16(self, address)
     }
 
     fn read_32(&mut self, address: usize) -> Result<u32, BusError> {
         self.map_device(address)?
-            .write()
+            .lock()
             .unwrap()
             .read_32(self, address)
     }
 
     fn write_8(&mut self, address: usize, value: u8) -> Result<(), BusError> {
         self.map_device(address)?
-            .write()
+            .lock()
             .unwrap()
             .write_8(self, address, value)
     }
 
     fn write_16(&mut self, address: usize, value: u16) -> Result<(), BusError> {
         self.map_device(address)?
-            .write()
+            .lock()
             .unwrap()
             .write_16(self, address, value)
     }
 
     fn write_32(&mut self, address: usize, value: u32) -> Result<(), BusError> {
         self.map_device(address)?
-            .write()
+            .lock()
             .unwrap()
             .write_32(self, address, value)
     }
 }
 
 pub trait IoDevice {
-    fn range(self: &Self) -> RangeInclusive<usize>;
-
     // No-op defaults are provided as a convenience for any device
     // that does not need to implement all data sizes.
     fn read_8(self: &mut Self, _bus: &mut Bus, _address: usize) -> Result<u8, BusError> {
@@ -409,9 +348,7 @@ pub trait IoDevice {
         Ok(())
     }
 
-    // Only memory-like devices may need to load data, wo the default
-    // implementation is a no-op.
-    fn load(self: &mut Self, _data: &[u8]) {}
+    fn service(self: &mut Self) {}
 }
 
 #[no_mangle]
@@ -536,6 +473,17 @@ mod tests {
     {
         let mut bus = Bus::new();
         bus.map_rom = false;
+
+        let ram = Arc::new(Mutex::new(
+            Memory::new(RAM_START, RAM_END, RAM_SIZE, false).unwrap(),
+        ));
+
+        let rom = Arc::new(Mutex::new(
+            Memory::new(ROM_START, ROM_END, ROM_SIZE, true).unwrap(),
+        ));
+
+        bus.ram = Some(ram);
+        bus.rom = Some(rom);
 
         test(&mut bus);
     }
