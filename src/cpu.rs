@@ -60,8 +60,8 @@ impl Cpu {
         Cpu {}
     }
 
-    pub fn execute(&mut self, cycles: i32) {
-        let _ = unsafe { m68k_execute(cycles as c_int) };
+    pub fn execute(&mut self, cycles: &u32) {
+        let _ = unsafe { m68k_execute(*cycles as c_int) };
     }
 }
 

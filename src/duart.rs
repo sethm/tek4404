@@ -241,7 +241,7 @@ impl Duart {
             ctx.stat |= STS_RXR;
             self.istat |= ISTS_RAI;
             self.ivec |= RX_INT;
-            ctx.rx_queue.push_back(c);
+            ctx.rx_queue.push_front(c);
         }
     }
 
@@ -254,7 +254,7 @@ impl Duart {
             ctx.stat |= STS_RXR;
             self.istat |= ISTS_RAI;
             self.ivec |= RX_INT;
-            ctx.rx_queue.push_back(c);
+            ctx.rx_queue.push_front(c);
         }
     }
 

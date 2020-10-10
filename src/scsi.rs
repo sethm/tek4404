@@ -213,9 +213,11 @@ impl IoDevice for Scsi {
                 let irq = self.interrupt;
 
                 if irq == INT_FC {
-                    // YES!!! THIS WORKS. IT WANTED COMMAND PHASE!!!!
-                    // NEXT IS COMMAND 010100 = TRANSFER INFO
-                    self.aux_stat = 0b00010000; // C/D=0,MSG=1
+                    // // YES!!! THIS WORKS. IT WANTED COMMAND PHASE!!!!
+                    // // NEXT IS COMMAND 010100 = TRANSFER INFO
+                    // self.aux_stat = 0b00010000; // C/D=0,MSG=1
+                    // self.interrupt = 0x2;
+                    self.aux_stat = 0x31;
                     self.interrupt = 0x2;
                     bus.schedule(ServiceKey::Scsi, Duration::from_millis(750));
                 }

@@ -200,6 +200,14 @@ impl Bus {
                 Some(d) => Ok(d.clone()),
                 None => Err(BusError::Access),
             },
+            SCSI_START..=SCSI_END => match &mut self.scsi {
+                Some(d) => Ok(d.clone()),
+                None => Err(BusError::Access),
+            },
+            MMU_START..=MMU_END => match &mut self.mmu {
+                Some(d) => Ok(d.clone()),
+                None => Err(BusError::Access),
+            },
             DEBUG_RAM_START..=DEBUG_RAM_END => match &mut self.debug_ram {
                 Some(d) => Ok(d.clone()),
                 None => Err(BusError::Access),
@@ -232,15 +240,7 @@ impl Bus {
                 Some(d) => Ok(d.clone()),
                 None => Err(BusError::Access),
             },
-            MMU_START..=MMU_END => match &mut self.mmu {
-                Some(d) => Ok(d.clone()),
-                None => Err(BusError::Access),
-            },
             PT_START..=PT_END => match &mut self.mmu {
-                Some(d) => Ok(d.clone()),
-                None => Err(BusError::Access),
-            },
-            SCSI_START..=SCSI_END => match &mut self.scsi {
                 Some(d) => Ok(d.clone()),
                 None => Err(BusError::Access),
             },

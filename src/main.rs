@@ -74,8 +74,6 @@ use sdl2::event::Event;
 use sdl2::pixels::PixelFormatEnum;
 use sdl2::rect::Rect;
 
-/// Number of 68010 machine cycles to execute on each CPU step.
-const CYCLES_PER_LOOP: i32 = 250;
 /// Framebuffer width
 const FB_WIDTH: u32 = 1024;
 /// Framebuffer height
@@ -84,6 +82,8 @@ const FB_HEIGHT: u32 = 1024;
 const WINDOW_WIDTH: u32 = 640;
 /// Visible window height
 const WINDOW_HEIGHT: u32 = 480;
+/// The number of milliseconds to idle between framebuffer repaints
+const DISPLAY_IDLE: u64 = 10;
 
 /// Clap options parsed from the command line
 #[derive(Clap)]
@@ -106,11 +106,19 @@ struct Opts {
         about = "CPU execution steps per loop"
     )]
     steps: u32,
+    /// The number of machine cycles to execute each step
+    #[clap(
+        short,
+        long,
+        default_value = "16",
+        about = "CPU cycles per execution step"
+    )]
+    cycles: u32,
     /// The amount of time to idle between loops
     #[clap(
         short,
         long,
-        default_value = "2",
+        default_value = "25",
         about = "Idle time between CPU loops (in ms)"
     )]
     idle: u64,
@@ -179,6 +187,7 @@ async fn main() -> Result<(), Box<dyn Error>> {
     // the bus lock can be dropped immediately)
     {
         let mut bus = BUS.lock().unwrap();
+
         // The bus can own these devices
         bus.rom = Some(rom);
         bus.ram = Some(ram);
@@ -190,6 +199,7 @@ async fn main() -> Result<(), Box<dyn Error>> {
         bus.duart = Some(duart.clone());
         bus.scsi = Some(scsi.clone());
 
+        // The bus must share the service queue
         bus.service_queue = Some(service_queue.clone());
     }
 
@@ -200,12 +210,10 @@ async fn main() -> Result<(), Box<dyn Error>> {
             async {
                 loop {
                     for _ in 0..opts.steps {
-                        cpu.execute(CYCLES_PER_LOOP);
+                        cpu.execute(&opts.cycles);
                     }
 
                     while let Some(srq) = service_queue.lock().unwrap().take() {
-                        // SERVICE IT!
-                        info!("SERVICING REQUEST FOR: {:?}...", srq.key);
                         match srq.key {
                             ServiceKey::Scsi => scsi.lock().unwrap().service(),
                         }
@@ -278,8 +286,7 @@ async fn main() -> Result<(), Box<dyn Error>> {
                         .expect("Couldn't copy texture to canvas.");
                     canvas.present();
 
-                    // Aim for 30 fps
-                    delay_for(Duration::from_millis(33)).await;
+                    delay_for(Duration::from_millis(DISPLAY_IDLE)).await;
                 }
             }
         );
