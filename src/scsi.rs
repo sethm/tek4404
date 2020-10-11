@@ -69,6 +69,17 @@ enum RegAddr {
 }
 
 /// SCSI Bus Phase
+//
+// MSG  C/D  I/O
+// -------------
+//  0    0    0      Data Out
+//  0    0    1      Data In
+//  0    1    0      Command
+//  0    1    1      Status
+//  1    0    0      [unused]
+//  1    0    1      [unused]
+//  1    1    0      Message Out
+//  1    1    1      Message In
 #[derive(FromPrimitive)]
 enum Phase {
     DataOut = 0,
