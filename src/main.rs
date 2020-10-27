@@ -33,6 +33,7 @@
 #[macro_use]
 mod log;
 mod acia;
+#[macro_use]
 mod bus;
 mod cal;
 mod cpu;
@@ -61,11 +62,11 @@ use duart::Duart;
 use log::*;
 use mem::Memory;
 use scsi::Scsi;
-use service::{ServiceKey, ServiceQueue};
+use service::ServiceKey;
 use video::Video;
 
 use clap::Clap;
-use tokio::time::{delay_for, Duration};
+use tokio::time;
 
 use std::error::Error;
 use std::sync::{Arc, Mutex};
@@ -161,8 +162,6 @@ async fn main() -> Result<(), Box<dyn Error>> {
 
     info!("INITIALIZING");
 
-    let service_queue = Arc::new(Mutex::new(ServiceQueue::new()));
-
     // Load the ROM boot file.
     let rom = Arc::new(Mutex::new(
         Memory::new(ROM_START, ROM_END, ROM_SIZE, true).unwrap(),
@@ -198,9 +197,6 @@ async fn main() -> Result<(), Box<dyn Error>> {
         bus.video_ram = Some(video_ram.clone());
         bus.duart = Some(duart.clone());
         bus.scsi = Some(scsi.clone());
-
-        // The bus must share the service queue
-        bus.service_queue = Some(service_queue.clone());
     }
 
     let mut cpu = Cpu::new();
@@ -208,18 +204,27 @@ async fn main() -> Result<(), Box<dyn Error>> {
     loop {
         tokio::join!(
             async {
+                let sleep_time = time::Duration::from_millis(opts.idle);
                 loop {
                     for _ in 0..opts.steps {
                         cpu.execute(&opts.cycles);
                     }
 
-                    while let Some(srq) = service_queue.lock().unwrap().take() {
-                        match srq.key {
-                            ServiceKey::Scsi => scsi.lock().unwrap().service(),
+                    loop {
+                        // Hold the Queue lock for as brief a time as possible
+                        // by assigning the result of `take()` to a variable.
+                        let next_task = QUEUE.lock().unwrap().take();
+
+                        if let Some(srq) = next_task {
+                            match srq.key {
+                                ServiceKey::Scsi => scsi.lock().unwrap().service(),
+                            }
+                        } else {
+                            break;
                         }
                     }
 
-                    delay_for(Duration::from_millis(opts.idle)).await;
+                    time::sleep(sleep_time).await;
                 }
             },
             AciaServer::run(
@@ -228,6 +233,7 @@ async fn main() -> Result<(), Box<dyn Error>> {
                 opts.port.as_str()
             ),
             async {
+                let sleep_time = time::Duration::from_millis(DISPLAY_IDLE);
                 let sdl_context = sdl2::init().expect("Could not initialize SDL2");
                 let video_subsystem = sdl_context.video().expect("Could not get video subsystem");
 
@@ -286,7 +292,7 @@ async fn main() -> Result<(), Box<dyn Error>> {
                         .expect("Couldn't copy texture to canvas.");
                     canvas.present();
 
-                    delay_for(Duration::from_millis(DISPLAY_IDLE)).await;
+                    time::sleep(sleep_time).await;
                 }
             }
         );

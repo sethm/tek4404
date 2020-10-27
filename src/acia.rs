@@ -117,7 +117,7 @@ impl AciaServer {
         let addr = format!("{}:{}", bind, port);
 
         info!("Listening for ACIA debug connections on {}", addr);
-        let mut listener = TcpListener::bind(addr).await.unwrap();
+        let listener = TcpListener::bind(addr).await.unwrap();
 
         loop {
             let state = state.clone();

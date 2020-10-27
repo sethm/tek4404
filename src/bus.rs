@@ -39,7 +39,6 @@ use crate::video::*;
 
 use std::os::raw::c_uint;
 use std::sync::{Arc, Mutex};
-use tokio::time::Duration;
 
 pub const ROM_START: usize = 0x740000;
 pub const ROM_END: usize = 0x74ffff;
@@ -113,6 +112,13 @@ lazy_static! {
     /// cannot take a refernce to a Bus structure as an argument, the
     /// memory map must be global and mutable.
     pub static ref BUS: Mutex<Bus> = Mutex::new(Bus::new());
+    pub static ref QUEUE: Mutex<ServiceQueue> = Mutex::new(ServiceQueue::new());
+}
+
+macro_rules! schedule {
+    ($key:expr, $delay:expr) => {
+        QUEUE.lock().unwrap().schedule($key, $delay);
+    };
 }
 
 pub type BusDevice = Arc<Mutex<dyn IoDevice + Send + Sync>>;
@@ -130,7 +136,6 @@ pub type CalendarDevice = Arc<Mutex<Calendar>>;
 
 pub struct Bus {
     pub map_rom: bool,
-    pub service_queue: Option<Arc<Mutex<ServiceQueue>>>,
     pub rom: Option<MemoryDevice>,
     pub ram: Option<MemoryDevice>,
     pub debug_ram: Option<MemoryDevice>,
@@ -152,7 +157,6 @@ impl Bus {
     pub fn new() -> Self {
         Bus {
             map_rom: true,
-            service_queue: None,
             rom: None,
             ram: None,
             debug_ram: Some(Arc::new(Mutex::new(
@@ -172,12 +176,6 @@ impl Bus {
             mouse: Some(Arc::new(Mutex::new(Mouse::new()))),
             timer: Some(Arc::new(Mutex::new(Timer::new()))),
             cal: Some(Arc::new(Mutex::new(Calendar::new()))),
-        }
-    }
-
-    pub fn schedule(&self, key: ServiceKey, delay: Duration) {
-        if let Some(queue) = &self.service_queue {
-            queue.lock().unwrap().schedule(key, delay);
         }
     }
 
