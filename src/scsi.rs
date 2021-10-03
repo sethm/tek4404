@@ -121,7 +121,7 @@ enum State {
     Status,
 }
 
-/// SCSI Commands
+/// SCSI BUS Commands
 #[derive(FromPrimitive)]
 enum Command {
     // Immediate Commands
@@ -147,6 +147,35 @@ enum Command {
     TxUnspInfoIn = 19,
     TransferInfo = 20,
     TransferPad = 21,
+}
+
+/// SCSI Opcodes
+#[allow(dead_code)]
+#[derive(FromPrimitive)]
+enum Op {
+    TestReady = 0x00,
+    Rewind = 0x01,
+    RequestSense = 0x03,
+    ReadBlockLimits = 0x05,
+    Read6 = 0x08,
+    Write6 = 0x0a,
+    WriteFileMark = 0x10,
+    Space = 0x11,
+    Inquiry = 0x12,
+    ModeSelect6 = 0x15,
+    Reserve = 0x16,
+    Release = 0x17,
+    Erase = 0x19,
+    ModeSense6 = 0x1a,
+    StartStop = 0x1b,
+    SendDiag = 0x1d,
+    PreventAllow = 0x1e,
+    ReadCapacity = 0x25,
+    Read10 = 0x28,
+    Write10 = 0x2a,
+    ReadLong = 0x3e,
+    ModeSelect10 = 0x55,
+    ModeSense10 = 0x5a,
 }
 
 #[allow(dead_code)]
@@ -248,7 +277,7 @@ impl Scsi {
 }
 
 impl IoDevice for Scsi {
-    fn read_8(self: &mut Self, _bus: &mut Bus, address: usize) -> Result<u8, BusError> {
+    fn read_8(&mut self, _bus: &mut Bus, address: usize) -> Result<u8, BusError> {
         match FromPrimitive::from_usize(address) {
             Some(RegAddr::Data1) => {
                 info!("(READ) DATA1={:02x}", self.data1);
@@ -301,7 +330,7 @@ impl IoDevice for Scsi {
         }
     }
 
-    fn write_8(self: &mut Self, _bus: &mut Bus, address: usize, value: u8) -> Result<(), BusError> {
+    fn write_8(&mut self, _bus: &mut Bus, address: usize, value: u8) -> Result<(), BusError> {
         match FromPrimitive::from_usize(address) {
             Some(RegAddr::Address) => {
                 info!("(WRITE) ADDRESS = {:02x}", value);

@@ -438,7 +438,7 @@ impl IoDevice for Duart {
         }
     }
 
-    fn read_16(self: &mut Self, bus: &mut Bus, address: usize) -> Result<u16, BusError> {
+    fn read_16(&mut self, bus: &mut Bus, address: usize) -> Result<u16, BusError> {
         match address {
             MR12A => {
                 let ctx = &self.ports[PORT_A];
@@ -454,7 +454,7 @@ impl IoDevice for Duart {
         }
     }
 
-    fn write_8(self: &mut Self, _bus: &mut Bus, address: usize, value: u8) -> Result<(), BusError> {
+    fn write_8(&mut self, _bus: &mut Bus, address: usize, value: u8) -> Result<(), BusError> {
         match address {
             MR12A => {
                 let mut ctx = &mut self.ports[PORT_A];

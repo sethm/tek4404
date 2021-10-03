@@ -307,46 +307,31 @@ impl Bus {
 pub trait IoDevice {
     // No-op defaults are provided as a convenience for any device
     // that does not need to implement all data sizes.
-    fn read_8(self: &mut Self, _bus: &mut Bus, _address: usize) -> Result<u8, BusError> {
+    fn read_8(&mut self, _bus: &mut Bus, _address: usize) -> Result<u8, BusError> {
         Ok(0)
     }
 
-    fn read_16(self: &mut Self, _bus: &mut Bus, _address: usize) -> Result<u16, BusError> {
+    fn read_16(&mut self, _bus: &mut Bus, _address: usize) -> Result<u16, BusError> {
         Ok(0)
     }
 
-    fn read_32(self: &mut Self, _bus: &mut Bus, _address: usize) -> Result<u32, BusError> {
+    fn read_32(&mut self, _bus: &mut Bus, _address: usize) -> Result<u32, BusError> {
         Ok(0)
     }
 
-    fn write_8(
-        self: &mut Self,
-        _bus: &mut Bus,
-        _address: usize,
-        _value: u8,
-    ) -> Result<(), BusError> {
+    fn write_8(&mut self, _bus: &mut Bus, _address: usize, _value: u8) -> Result<(), BusError> {
         Ok(())
     }
 
-    fn write_16(
-        self: &mut Self,
-        _bus: &mut Bus,
-        _address: usize,
-        _value: u16,
-    ) -> Result<(), BusError> {
+    fn write_16(&mut self, _bus: &mut Bus, _address: usize, _value: u16) -> Result<(), BusError> {
         Ok(())
     }
 
-    fn write_32(
-        self: &mut Self,
-        _bus: &mut Bus,
-        _address: usize,
-        _value: u32,
-    ) -> Result<(), BusError> {
+    fn write_32(&mut self, _bus: &mut Bus, _address: usize, _value: u32) -> Result<(), BusError> {
         Ok(())
     }
 
-    fn service(self: &mut Self) {}
+    fn service(&mut self) {}
 }
 
 #[no_mangle]

@@ -27,7 +27,7 @@ use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::net::{TcpListener, TcpStream};
 
 use std::future::Future;
-use std::net::{Shutdown, SocketAddr};
+use std::net::SocketAddr;
 use std::pin::Pin;
 use std::sync::{Arc, Mutex};
 use std::task::{Context, Poll, Waker};
@@ -127,15 +127,18 @@ impl AciaServer {
                 socket
                     .write_all(b"Already connected. Goodbye.\r\n")
                     .await
-                    .unwrap();
-                socket.shutdown(Shutdown::Both).unwrap();
+                    .expect("ACIA socket write failed.");
+                socket
+                    .shutdown()
+                    .await
+                    .expect("ACIA socket shutdown failed.");
                 continue;
             }
 
             socket
                 .write_all(b"*** Welcome to the Tektronix 4404 simulator Debug ACIA ***\r\n")
                 .await
-                .unwrap();
+                .expect("ACIA socket write failed.");
 
             tokio::spawn(async move {
                 AciaServer::process(state, socket, peer).await;

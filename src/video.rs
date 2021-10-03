@@ -41,37 +41,27 @@ impl IoDevice for Video {
         Ok(0)
     }
 
-    fn read_16(self: &mut Self, _bus: &mut Bus, address: usize) -> Result<u16, BusError> {
+    fn read_16(&mut self, _bus: &mut Bus, address: usize) -> Result<u16, BusError> {
         debug!("Read 16 (address={:08x})", address);
         Ok(0)
     }
 
-    fn read_32(self: &mut Self, _bus: &mut Bus, address: usize) -> Result<u32, BusError> {
+    fn read_32(&mut self, _bus: &mut Bus, address: usize) -> Result<u32, BusError> {
         debug!("Read 32 (address={:08x})", address);
         Ok(0)
     }
 
-    fn write_8(self: &mut Self, _bus: &mut Bus, address: usize, value: u8) -> Result<(), BusError> {
+    fn write_8(&mut self, _bus: &mut Bus, address: usize, value: u8) -> Result<(), BusError> {
         debug!("Write 8 (address={:08x} value={:02x})", address, value);
         Ok(())
     }
 
-    fn write_16(
-        self: &mut Self,
-        _bus: &mut Bus,
-        address: usize,
-        value: u16,
-    ) -> Result<(), BusError> {
+    fn write_16(&mut self, _bus: &mut Bus, address: usize, value: u16) -> Result<(), BusError> {
         debug!("Write 16 (address={:08x} value={:04x})", address, value);
         Ok(())
     }
 
-    fn write_32(
-        self: &mut Self,
-        _bus: &mut Bus,
-        address: usize,
-        value: u32,
-    ) -> Result<(), BusError> {
+    fn write_32(&mut self, _bus: &mut Bus, address: usize, value: u32) -> Result<(), BusError> {
         debug!("Write 32 (address={:08x} value={:08x})", address, value);
         Ok(())
     }
