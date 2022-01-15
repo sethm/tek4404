@@ -22,11 +22,11 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 // DEALINGS IN THE SOFTWARE.
 //
-use clap::Clap;
+use clap::Parser;
 use std::sync::Mutex;
 use strum_macros::{Display, EnumString};
 
-#[derive(Clap, Eq, PartialEq, Ord, PartialOrd, Display, EnumString, Clone)]
+#[derive(Parser, Eq, PartialEq, Ord, PartialOrd, Display, Debug, EnumString, Clone)]
 pub enum LogLevel {
     #[strum(serialize = "io")]
     Io,

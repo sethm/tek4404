@@ -65,7 +65,7 @@ use scsi::Scsi;
 use service::ServiceKey;
 use video::Video;
 
-use clap::Clap;
+use clap::Parser;
 use tokio::time;
 
 use std::error::Error;
@@ -87,24 +87,24 @@ const WINDOW_HEIGHT: u32 = 480;
 const DISPLAY_IDLE: u64 = 10;
 
 /// Clap options parsed from the command line
-#[derive(Clap)]
+#[derive(Parser, Debug)]
 #[clap(about = "Tektronix 4404 Emulator")]
 struct Opts {
     /// The path to the 32KB boot ROM image
     #[clap(short, long, default_value = "rom/boot.bin")]
     bootrom: String,
     /// The address to bind the debug ACIA telnet server to
-    #[clap(short, long, default_value = "0.0.0.0", about = "Address to bind to")]
+    #[clap(short, long, default_value = "0.0.0.0", help = "Address to bind to")]
     address: String,
     /// The port to bind the debug ACIA telnet server to
-    #[clap(short, long, default_value = "9090", about = "Port to bind to")]
+    #[clap(short, long, default_value = "9090", help = "Port to bind to")]
     port: String,
     /// The number of CPU steps to take on each loop
     #[clap(
         short,
         long,
         default_value = "30000",
-        about = "CPU execution steps per loop"
+        help = "CPU execution steps per loop"
     )]
     steps: u32,
     /// The number of machine cycles to execute each step
@@ -112,7 +112,7 @@ struct Opts {
         short,
         long,
         default_value = "16",
-        about = "CPU cycles per execution step"
+        help = "CPU cycles per execution step"
     )]
     cycles: u32,
     /// The amount of time to idle between loops
@@ -120,7 +120,7 @@ struct Opts {
         short,
         long,
         default_value = "25",
-        about = "Idle time between CPU loops (in ms)"
+        help = "Idle time between CPU loops (in ms)"
     )]
     idle: u64,
     /// The level of logging to display
@@ -128,7 +128,7 @@ struct Opts {
         short,
         long,
         default_value = "info",
-        about = "Log level [io|trace|debug|info|error|none]"
+        help = "Log level [io|trace|debug|info|error|none]"
     )]
     loglvl: LogLevel,
 }
