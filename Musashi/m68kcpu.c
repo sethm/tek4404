@@ -67,7 +67,7 @@ const char *const m68ki_cpu_names[] =
 	"M68000",
 	"M68010",
 	"Invalid CPU",
-	"M68EC020"
+	"M68EC020",
 	"Invalid CPU",
 	"Invalid CPU",
 	"Invalid CPU",
