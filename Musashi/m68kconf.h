@@ -65,10 +65,10 @@
 
 /* Turn ON if you want to use the following M68K variants */
 #define M68K_EMULATE_010            OPT_ON
-#define M68K_EMULATE_EC020          OPT_OFF
-#define M68K_EMULATE_020            OPT_OFF
-#define M68K_EMULATE_030            OPT_OFF
-#define M68K_EMULATE_040            OPT_OFF
+#define M68K_EMULATE_EC020          OPT_ON
+#define M68K_EMULATE_020            OPT_ON
+#define M68K_EMULATE_030            OPT_ON
+#define M68K_EMULATE_040            OPT_ON
 
 
 /* If ON, the CPU will call m68k_read_immediate_xx() for immediate addressing
@@ -161,7 +161,8 @@
 /* If ON, CPU will call the instruction hook callback before every
  * instruction.
  */
-#define M68K_INSTRUCTION_HOOK       OPT_ON
+#define M68K_INSTRUCTION_HOOK       OPT_OFF
+#define M68K_INSTRUCTION_CALLBACK(pc) your_instruction_hook_function(pc)
 
 
 /* If ON, the CPU will emulate the 4-byte prefetch queue of a real 68000 */

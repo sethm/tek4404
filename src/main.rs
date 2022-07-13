@@ -49,8 +49,6 @@ mod sound;
 mod timer;
 mod video;
 
-#[macro_use]
-extern crate lazy_static;
 extern crate num_derive;
 extern crate strum;
 extern crate strum_macros;

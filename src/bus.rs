@@ -37,6 +37,7 @@ use crate::sound::*;
 use crate::timer::*;
 use crate::video::*;
 
+use once_cell::sync::Lazy;
 use std::os::raw::c_uint;
 use std::sync::{Arc, Mutex};
 
@@ -103,17 +104,15 @@ pub const CAL_END: usize = 0x7bbfff;
 // deadlocks, however, *only* the extern C functions and a few select
 // helper functions are allowed to lock the bus mutex!
 
-lazy_static! {
-    /// The global memory map, used for dispatching the address bus.
-    ///
-    /// In an ideal world, this would not be a global static. However,
-    /// because the CPU implementation is an FFI interface to C code,
-    /// and that C code links to Rust read and write functions that
-    /// cannot take a refernce to a Bus structure as an argument, the
-    /// memory map must be global and mutable.
-    pub static ref BUS: Mutex<Bus> = Mutex::new(Bus::new());
-    pub static ref QUEUE: Mutex<ServiceQueue> = Mutex::new(ServiceQueue::new());
-}
+/// The global memory map, used for dispatching the address bus.
+///
+/// In an ideal world, this would not be a global static. However,
+/// because the CPU implementation is an FFI interface to C code,
+/// and that C code links to Rust read and write functions that
+/// cannot take a refernce to a Bus structure as an argument, the
+/// memory map must be global and mutable.
+pub static BUS: Lazy<Mutex<Bus>> = Lazy::new(|| Mutex::new(Bus::new()));
+pub static QUEUE: Lazy<Mutex<ServiceQueue>> = Lazy::new(|| Mutex::new(ServiceQueue::new()));
 
 macro_rules! schedule {
     ($key:expr, $delay:expr) => {

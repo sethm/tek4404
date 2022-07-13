@@ -23,6 +23,7 @@
 // DEALINGS IN THE SOFTWARE.
 //
 use clap::Parser;
+use once_cell::sync::Lazy;
 use std::sync::Mutex;
 use strum_macros::{Display, EnumString};
 
@@ -50,11 +51,11 @@ pub struct Logger {
 
 type LoggerRef = Mutex<Logger>;
 
-lazy_static! {
-    pub static ref LOGGER: LoggerRef = Mutex::new(Logger {
-        log_level: LogLevel::None
-    });
-}
+pub static LOGGER: Lazy<LoggerRef> = Lazy::new(|| {
+    Mutex::new(Logger {
+        log_level: LogLevel::None,
+    })
+});
 
 pub fn init(log_level: LogLevel) {
     LOGGER.lock().unwrap().log_level = log_level;
