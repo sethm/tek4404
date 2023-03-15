@@ -136,7 +136,7 @@ struct Opts {
 // TODO: It makes much more sense to implement a special memory device
 //       for video RAM that reads and writes each pixel as an RGB332 byte,
 //       then we don't need this expensive step.
-fn update_framebuffer(vm: &MemoryDevice, fb: &mut Vec<u8>) {
+fn update_framebuffer(vm: &MemoryDevice, fb: &mut [u8]) {
     let mut index: usize = 0;
     let mem = &vm.lock().unwrap().mem;
 

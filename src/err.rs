@@ -73,16 +73,16 @@ pub enum SimError {
 
 impl fmt::Debug for SimError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        match &*self {
-            SimError::Init(s) => write!(f, "Initialization Error: {}", s),
+        match self {
+            SimError::Init(s) => write!(f, "Initialization Error: {s}"),
         }
     }
 }
 
 impl fmt::Display for SimError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        match &*self {
-            SimError::Init(s) => write!(f, "Initialization Error: {}", s),
+        match self {
+            SimError::Init(s) => write!(f, "Initialization Error: {s}"),
         }
     }
 }

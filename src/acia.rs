@@ -114,7 +114,7 @@ pub struct AciaServer {}
 
 impl AciaServer {
     pub async fn run(state: SharedAciaState, bind: &str, port: &str) {
-        let addr = format!("{}:{}", bind, port);
+        let addr = format!("{bind}:{port}");
 
         info!("Listening for ACIA debug connections on {}", addr);
         let listener = TcpListener::bind(addr).await.unwrap();

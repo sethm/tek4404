@@ -87,7 +87,7 @@ macro_rules! log_common {
 #[macro_export]
 macro_rules! io {
     ($($msg:expr),+) => {{
-        use crate::log::*;
+        use $crate::log::*;
 
         log_common!(LogLevel::Io, $($msg),+);
     }};
@@ -97,7 +97,7 @@ macro_rules! io {
 #[macro_export]
 macro_rules! trace {
     ($($msg:expr),+) => {{
-        use crate::log::*;
+        use $crate::log::*;
 
         log_common!(LogLevel::Trace, $($msg),+);
     }};
@@ -107,7 +107,7 @@ macro_rules! trace {
 #[macro_export]
 macro_rules! debug {
     ($($msg:expr),+) => {{
-        use crate::log::*;
+        use $crate::log::*;
 
         log_common!(LogLevel::Debug, $($msg),+);
     }};
@@ -117,7 +117,7 @@ macro_rules! debug {
 #[macro_export]
 macro_rules! info {
     ($($msg:expr),+) => {{
-        use crate::log::*;
+        use $crate::log::*;
 
         log_common!(LogLevel::Info, $($msg),+);
     }};
@@ -127,7 +127,7 @@ macro_rules! info {
 #[macro_export]
 macro_rules! error {
     ($($msg:expr),+) => {{
-        use crate::log::*;
+        use $crate::log::*;
 
         log_common!(LogLevel::Error, $($msg),+);
     }};

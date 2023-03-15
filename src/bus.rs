@@ -434,7 +434,7 @@ pub fn m68k_write_memory_16(addr: c_uint, val: c_uint) {
 #[no_mangle]
 pub fn m68k_write_memory_32(addr: c_uint, val: c_uint) {
     io!("[WRITE] [LONG] {:08x} = {:08x}", addr, val);
-    let result = BUS.lock().unwrap().write_32(addr as usize, val as u32);
+    let result = BUS.lock().unwrap().write_32(addr as usize, val);
     match result {
         Ok(()) => {}
         Err(BusError::ReadOnly) => {
@@ -449,9 +449,9 @@ mod tests {
     use super::*;
     use std::panic;
 
-    fn with_bus<T>(test: T) -> ()
+    fn with_bus<T>(test: T)
     where
-        T: FnOnce(&mut Bus) -> () + panic::UnwindSafe,
+        T: FnOnce(&mut Bus) + panic::UnwindSafe,
     {
         let mut bus = Bus::new();
         bus.map_rom = false;
@@ -476,7 +476,7 @@ mod tests {
         #[test]
         fn test_read_write_8() {
             with_bus(|bus| {
-                let _ = bus.write_8(0x100, 0x01).unwrap();
+                bus.write_8(0x100, 0x01).unwrap();
                 assert_eq!(0x01, bus.read_8(0x100).unwrap());
             })
         }
@@ -499,7 +499,7 @@ mod tests {
         #[test]
         fn test_read_write_16() {
             with_bus(|bus| {
-                let _ = bus.write_16(0x100, 0x0102).unwrap();
+                bus.write_16(0x100, 0x0102).unwrap();
                 assert_eq!(0x0102, bus.read_16(0x100).unwrap());
             })
         }
@@ -531,7 +531,7 @@ mod tests {
         #[test]
         fn test_read_write_32() {
             with_bus(|bus| {
-                let _ = bus.write_32(0x100, 0x01020304).unwrap();
+                bus.write_32(0x100, 0x01020304).unwrap();
                 assert_eq!(0x01020304, bus.read_32(0x100).unwrap());
             })
         }

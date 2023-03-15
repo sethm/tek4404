@@ -140,9 +140,9 @@ mod tests {
     use super::*;
     use std::panic;
 
-    fn with_mem<T>(test: T) -> ()
+    fn with_mem<T>(test: T)
     where
-        T: FnOnce(&mut Memory, &mut Bus) -> () + panic::UnwindSafe,
+        T: FnOnce(&mut Memory, &mut Bus) + panic::UnwindSafe,
     {
         let mut mem = Memory::new(0x1000, 0xffff, 0xefff, false).unwrap();
         let mut bus = Bus::new();
