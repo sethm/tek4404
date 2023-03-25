@@ -260,15 +260,26 @@ impl Scsi {
         schedule!(ServiceKey::Scsi, Duration::from_millis(750));
     }
 
+    fn transfer_pad(&mut self) {
+        info!(
+            "(COMMAND) Transfer Pad. XFER={} ({:x})",
+            self.xfer, self.xfer
+        );
+        self.cmd_ptr = 0;
+
+        schedule!(ServiceKey::Scsi, Duration::from_millis(75));
+    }
+
     /// Process the last command.
     fn handle_command(&mut self) {
-        let c = self.command;
+        let c = self.command & 0x1f;
 
         match FromPrimitive::from_u8(c) {
             Some(Command::ChipReset) => self.reset(),
             Some(Command::SelectWithAtn) => self.select(true),
             Some(Command::SelectWithoutAtn) => self.select(false),
             Some(Command::TransferInfo) => self.transfer_info(),
+            Some(Command::TransferPad) => self.transfer_pad(),
             _ => {
                 info!("Unhandled scsi command: 0x{:02x} (b{:06b})", c, c);
             }
