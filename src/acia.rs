@@ -60,8 +60,8 @@ enum TelnetState {
 pub struct AciaState {
     ts: TelnetState,
     pub connected: bool,
-    pub tx_data: ArrayDeque<[u8; 8], Saturating>,
-    pub rx_data: ArrayDeque<[u8; 8], Saturating>,
+    pub tx_data: ArrayDeque<u8, 8, Saturating>,
+    pub rx_data: ArrayDeque<u8, 8, Saturating>,
     pub waker: Option<Waker>,
 }
 
