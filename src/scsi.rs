@@ -27,9 +27,9 @@ use crate::cpu::set_irq;
 use crate::err::BusError;
 use crate::service::ServiceKey;
 
+use log::info;
 use num_derive::FromPrimitive;
 use num_traits::FromPrimitive;
-
 use tokio::time::Duration;
 
 const HOST_ID: u8 = 7;

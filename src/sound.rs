@@ -25,6 +25,7 @@
 use crate::bus::*;
 use crate::err::*;
 
+use log::info;
 use std::result::Result;
 
 pub struct Sound {}

@@ -21,6 +21,7 @@
 // WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 // DEALINGS IN THE SOFTWARE.
+use log::{log_enabled, trace, Level};
 use std::ffi::CStr;
 use std::os::raw::{c_char, c_int, c_uint};
 
@@ -93,7 +94,7 @@ fn reset() {
 
 #[no_mangle]
 extern "C" fn instruction_hook(pc: c_uint) {
-    if crate::log::is_debug() {
+    if log_enabled!(Level::Trace) {
         let mut c_arr: [c_char; 256] = [0; 256];
         let c_ptr = c_arr.as_mut_ptr();
 

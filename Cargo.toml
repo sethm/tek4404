@@ -11,6 +11,8 @@ cc = "1.0"
 arraydeque = "0.5"
 byteorder = "1.4"
 clap = { version = "4.2", features = ["derive"] }
+env_logger = "0.10"
+log = "0.4"
 num-derive = "0.3"
 num-traits = "0.2"
 once_cell = "1.17"

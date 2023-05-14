@@ -30,8 +30,6 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 // DEALINGS IN THE SOFTWARE.
 //
-#[macro_use]
-mod log;
 mod acia;
 #[macro_use]
 mod bus;
@@ -57,7 +55,7 @@ use acia::{Acia, AciaServer, AciaState};
 use bus::*;
 use cpu::Cpu;
 use duart::Duart;
-use log::*;
+use log::info;
 use mem::Memory;
 use scsi::Scsi;
 use service::ServiceKey;
@@ -121,14 +119,6 @@ struct Opts {
         help = "Idle time between CPU loops (in ms)"
     )]
     idle: u64,
-    /// The level of logging to display
-    #[clap(
-        short,
-        long,
-        default_value = "info",
-        help = "Log level [io|trace|debug|info|error|none]"
-    )]
-    loglvl: LogLevel,
 }
 
 /// Update the framebuffer vector based on current state of Video RAM
@@ -156,7 +146,7 @@ fn update_framebuffer(vm: &MemoryDevice, fb: &mut [u8]) {
 async fn main() -> Result<(), Box<dyn Error>> {
     let opts: Opts = Opts::parse();
 
-    log::init(opts.loglvl.clone());
+    env_logger::init();
 
     info!("INITIALIZING");
 

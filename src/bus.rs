@@ -37,6 +37,7 @@ use crate::sound::*;
 use crate::timer::*;
 use crate::video::*;
 
+use log::{error, trace};
 use once_cell::sync::Lazy;
 use std::os::raw::c_uint;
 use std::sync::{Arc, Mutex};
@@ -363,7 +364,7 @@ pub fn m68k_read_memory_8(address: c_uint) -> c_uint {
 
     match result {
         Ok(byte) => {
-            io!("[ READ] [BYTE] {:08x} = {:04x}", address, byte);
+            trace!("[ READ] [BYTE] {:08x} = {:04x}", address, byte);
             byte as c_uint
         }
         Err(_) => {
@@ -379,7 +380,7 @@ pub fn m68k_read_memory_16(address: c_uint) -> c_uint {
 
     match result {
         Ok(word) => {
-            io!("[ READ] [WORD] {:08x} = {:04x}", address, word);
+            trace!("[ READ] [WORD] {:08x} = {:04x}", address, word);
             word as c_uint
         }
         Err(_) => {
@@ -395,7 +396,7 @@ pub fn m68k_read_memory_32(address: c_uint) -> c_uint {
 
     match result {
         Ok(long) => {
-            io!("[ READ] [LONG] {:08x} = {:08x}", address, long);
+            trace!("[ READ] [LONG] {:08x} = {:08x}", address, long);
             long as c_uint
         }
         Err(_) => {
@@ -407,12 +408,12 @@ pub fn m68k_read_memory_32(address: c_uint) -> c_uint {
 
 #[no_mangle]
 pub fn m68k_write_memory_8(addr: c_uint, val: c_uint) {
-    io!("[WRITE] [BYTE] {:08x} = {:02x}", addr, val);
+    trace!("[WRITE] [BYTE] {:08x} = {:02x}", addr, val);
     let result = BUS.lock().unwrap().write_8(addr as usize, val as u8);
     match result {
         Ok(()) => {}
         Err(BusError::ReadOnly) => {
-            io!("READ-ONLY ERROR");
+            error!("READ-ONLY ERROR (8): 0x{:08x}", addr);
         }
         Err(_) => cpu::bus_error(),
     }
@@ -420,12 +421,12 @@ pub fn m68k_write_memory_8(addr: c_uint, val: c_uint) {
 
 #[no_mangle]
 pub fn m68k_write_memory_16(addr: c_uint, val: c_uint) {
-    io!("[WRITE] [WORD] {:08x} = {:04x}", addr, val);
+    trace!("[WRITE] [WORD] {:08x} = {:04x}", addr, val);
     let result = BUS.lock().unwrap().write_16(addr as usize, val as u16);
     match result {
         Ok(()) => {}
         Err(BusError::ReadOnly) => {
-            io!("READ-ONLY ERROR");
+            error!("READ-ONLY ERROR (16): 0x{:08x}", addr);
         }
         Err(_) => cpu::bus_error(),
     }
@@ -433,12 +434,12 @@ pub fn m68k_write_memory_16(addr: c_uint, val: c_uint) {
 
 #[no_mangle]
 pub fn m68k_write_memory_32(addr: c_uint, val: c_uint) {
-    io!("[WRITE] [LONG] {:08x} = {:08x}", addr, val);
+    trace!("[WRITE] [LONG] {:08x} = {:08x}", addr, val);
     let result = BUS.lock().unwrap().write_32(addr as usize, val);
     match result {
         Ok(()) => {}
         Err(BusError::ReadOnly) => {
-            io!("READ-ONLY ERROR");
+            error!("READ-ONLY ERROR (32): 0x{:08x}", addr);
         }
         Err(_) => cpu::bus_error(),
     }

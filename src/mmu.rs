@@ -25,6 +25,8 @@
 use crate::bus::*;
 use crate::err::BusError;
 
+use log::debug;
+
 pub struct Mmu {}
 
 impl Mmu {

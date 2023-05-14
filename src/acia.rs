@@ -35,6 +35,8 @@ use std::task::{Context, Poll, Waker};
 use crate::bus::*;
 use crate::err::*;
 
+use log::{debug, error, info};
+
 const DATA_REG: usize = 0x78c000;
 const STAT_REG: usize = 0x78c002;
 const CMD_REG: usize = 0x78c004;

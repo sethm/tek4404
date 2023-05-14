@@ -25,6 +25,7 @@
 use crate::bus::*;
 use crate::err::*;
 
+use log::debug;
 use std::result::Result;
 
 pub struct Video {}
