@@ -236,7 +236,7 @@ impl Duart {
     pub fn key_down(&mut self, k: &Keycode) {
         let c = map_keycode(k);
         debug!("Key Down: {:02x}", c);
-        let mut ctx = &mut self.ports[PORT_A];
+        let ctx = &mut self.ports[PORT_A];
 
         if (ctx.conf & CNF_ERX) != 0 {
             ctx.stat |= STS_RXR;
@@ -261,7 +261,7 @@ impl Duart {
 
     #[allow(dead_code)]
     fn handle_rx(&mut self, port: usize) {
-        let mut ctx = &mut self.ports[port];
+        let ctx = &mut self.ports[port];
 
         let (istat, ivec) = match port {
             0 => (ISTS_RAI, RX_INT),
@@ -280,7 +280,7 @@ impl Duart {
 
     #[allow(dead_code)]
     fn handle_tx(&mut self, port: usize) {
-        let mut ctx = &mut self.ports[port];
+        let ctx = &mut self.ports[port];
 
         let (tx_istat, rx_istat) = match port {
             0 => (ISTS_TAI, ISTS_RAI),
@@ -313,7 +313,7 @@ impl Duart {
             return;
         }
 
-        let mut ctx = &mut self.ports[port];
+        let ctx = &mut self.ports[port];
 
         debug!("Port {} Command {:02x}", port, cmd);
 
@@ -374,7 +374,7 @@ impl IoDevice for Duart {
     fn read_8(&mut self, _bus: &mut Bus, address: usize) -> Result<u8, BusError> {
         match address {
             MR12A => {
-                let mut ctx = &mut self.ports[PORT_A];
+                let ctx = &mut self.ports[PORT_A];
                 let val = ctx.mode[ctx.mode_ptr];
                 ctx.mode_ptr = (ctx.mode_ptr + 1) % 2;
                 debug!("[READ] MR12A: val={:02x}", val);
@@ -385,7 +385,7 @@ impl IoDevice for Duart {
                 Ok(self.ports[PORT_A].stat)
             }
             THRA => {
-                let mut ctx = &mut self.ports[PORT_A];
+                let ctx = &mut self.ports[PORT_A];
                 if let Some(c) = ctx.rx_queue.pop_back() {
                     ctx.rx_data = c;
                 }
@@ -410,7 +410,7 @@ impl IoDevice for Duart {
                 Ok(self.istat)
             }
             MR12B => {
-                let mut ctx = &mut self.ports[PORT_B];
+                let ctx = &mut self.ports[PORT_B];
                 let val = ctx.mode[ctx.mode_ptr];
                 ctx.mode_ptr = (ctx.mode_ptr + 1) % 2;
                 debug!("[READ]: MR12B: val={:02x}", val);
@@ -421,7 +421,7 @@ impl IoDevice for Duart {
                 Ok(self.ports[PORT_B].stat)
             }
             THRB => {
-                let mut ctx = &mut self.ports[PORT_B];
+                let ctx = &mut self.ports[PORT_B];
                 ctx.stat &= !STS_RXR;
                 self.istat &= !ISTS_RBI;
                 self.ivec &= !KEYBOARD_INT;
@@ -458,7 +458,7 @@ impl IoDevice for Duart {
     fn write_8(&mut self, _bus: &mut Bus, address: usize, value: u8) -> Result<(), BusError> {
         match address {
             MR12A => {
-                let mut ctx = &mut self.ports[PORT_A];
+                let ctx = &mut self.ports[PORT_A];
                 ctx.mode[ctx.mode_ptr] = value;
                 ctx.mode_ptr = (ctx.mode_ptr + 1) % 2;
                 debug!("[WRITE]: MR12A: val={:02x}", value);
@@ -471,7 +471,7 @@ impl IoDevice for Duart {
                 } else {
                     DELAY_RATES_B[baud_bits]
                 };
-                let mut ctx = &mut self.ports[PORT_A];
+                let ctx = &mut self.ports[PORT_A];
                 ctx.char_delay = Duration::new(0, delay);
                 debug!("[WRITE]: CSRA: val={:02x}", value);
             }
@@ -480,7 +480,7 @@ impl IoDevice for Duart {
                 debug!("[WRITE]: CRA: val={:02x}", value);
             }
             THRA => {
-                let mut ctx = &mut self.ports[PORT_A];
+                let ctx = &mut self.ports[PORT_A];
                 ctx.tx_data = value;
                 // Update state. Since we're transmitting, the
                 // transmitter buffer is not empty.  The actual
@@ -499,7 +499,7 @@ impl IoDevice for Duart {
                 debug!("[WRITE]: ISR_MASK: val={:02x}", value);
             }
             MR12B => {
-                let mut ctx = &mut self.ports[PORT_B];
+                let ctx = &mut self.ports[PORT_B];
                 ctx.mode[ctx.mode_ptr] = value;
                 ctx.mode_ptr = (ctx.mode_ptr + 1) % 2;
                 debug!("[WRITE]: MR12B: val={:02x}", value);
@@ -514,7 +514,7 @@ impl IoDevice for Duart {
                 // the keyboard are status requests, or keyboard beep
                 // requests. We ignore status requests, and only
                 // put beep requests into the queue.
-                let mut ctx = &mut self.ports[PORT_B];
+                let ctx = &mut self.ports[PORT_B];
 
                 if (value & 0x08) != 0 {
                     ctx.tx_data = value;
@@ -538,7 +538,7 @@ impl IoDevice for Duart {
                     // Keyboard Reset.
                     // Transmit something!
                     debug!("KEYBOARD RESET.");
-                    let mut ctx = &mut self.ports[PORT_A];
+                    let ctx = &mut self.ports[PORT_A];
                     ctx.rx_data = 0xf0; // Reset
                     ctx.stat |= STS_RXR;
                 }
