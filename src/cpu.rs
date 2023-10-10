@@ -21,7 +21,7 @@
 // WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 // DEALINGS IN THE SOFTWARE.
-use log::{log_enabled, trace, Level};
+use log::{debug, log_enabled, trace, Level};
 use std::ffi::CStr;
 use std::os::raw::{c_char, c_int, c_uint};
 
@@ -79,6 +79,7 @@ pub fn bus_error() {
 }
 
 fn init() {
+    debug!("CPU Init.");
     unsafe {
         m68k_init();
         m68k_set_cpu_type(M68K_CPU_TYPE_68010);
@@ -95,10 +96,10 @@ fn reset() {
 #[no_mangle]
 extern "C" fn instruction_hook(pc: c_uint) {
     if log_enabled!(Level::Trace) {
-        let mut c_arr: [c_char; 256] = [0; 256];
-        let c_ptr = c_arr.as_mut_ptr();
+        static mut C_ARR: [c_char; 256] = [0; 256];
 
         unsafe {
+            let c_ptr = C_ARR.as_mut_ptr();
             m68k_disassemble(c_ptr, pc, M68K_CPU_TYPE_68010);
             trace!("{:08x}:    {}", pc, CStr::from_ptr(c_ptr).to_str().unwrap());
         }

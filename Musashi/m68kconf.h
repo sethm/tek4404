@@ -161,8 +161,8 @@
 /* If ON, CPU will call the instruction hook callback before every
  * instruction.
  */
-#define M68K_INSTRUCTION_HOOK       OPT_OFF
-#define M68K_INSTRUCTION_CALLBACK(pc) your_instruction_hook_function(pc)
+#define M68K_INSTRUCTION_HOOK       OPT_ON
+#define M68K_INSTRUCTION_CALLBACK(pc) instruction_hook(pc)
 
 
 /* If ON, the CPU will emulate the 4-byte prefetch queue of a real 68000 */

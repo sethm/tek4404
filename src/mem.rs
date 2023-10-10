@@ -25,6 +25,7 @@
 use crate::bus::*;
 use crate::err::*;
 use byteorder::{BigEndian, ByteOrder};
+use log::info;
 use std::borrow::Borrow;
 
 #[allow(dead_code)]
@@ -101,7 +102,29 @@ impl IoDevice for Memory {
     fn write_8(&mut self, bus: &mut Bus, address: usize, value: u8) -> Result<(), BusError> {
         let offset = self.get_offset(bus, address)?;
         if self.read_only {
-            Err(BusError::ReadOnly)
+            // Writing to ROM is a secret code in the tek4404: it is a
+            // signal latch data bits 0-4 into the processor status LEDs.
+            info!(
+                "Processor Status LEDs: [{} {} {} {}]",
+                match value & 0x01 == 0x01 {
+                    true => "0",
+                    false => "1",
+                },
+                match value & 0x02 == 0x02 {
+                    true => "0",
+                    false => "1",
+                },
+                match value & 0x04 == 0x04 {
+                    true => "0",
+                    false => "1",
+                },
+                match value & 0x08 == 0x08 {
+                    true => "0",
+                    false => "1",
+                }
+            );
+
+            Ok(())
         } else {
             self.mem[offset] = value;
             Ok(())
