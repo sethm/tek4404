@@ -26,7 +26,6 @@ use crate::bus::*;
 use crate::err::*;
 use byteorder::{BigEndian, ByteOrder};
 use log::info;
-use std::borrow::Borrow;
 
 #[allow(dead_code)]
 #[derive(Debug)]
@@ -69,7 +68,7 @@ impl Memory {
     }
 
     pub fn load(&mut self, data: &[u8]) {
-        self.mem.copy_from_slice(data.borrow());
+        self.mem.copy_from_slice(data);
     }
 }
 

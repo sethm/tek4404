@@ -1,4 +1,6 @@
-//! NCR 5386 SCSI controller
+//! NCR 5385 SCSI controller
+use std::time::Duration;
+
 //
 // Copyright 2020 Seth Morabito <web@loomcom.com>
 //
@@ -30,54 +32,22 @@ use crate::service::ServiceKey;
 use log::info;
 use num_derive::FromPrimitive;
 use num_traits::FromPrimitive;
-use tokio::time::Duration;
 
+/// The hardwired SCSI ID of the host controller
 const HOST_ID: u8 = 7;
-const DIAG_COMPLETE: u8 = 0x80;
+
+/// The SCSI controller CPU interrupt level
 const SCSI_INT: u8 = 3;
 
-const CMD_SIZE: usize = 12;
+/// Aux Status Flags
+const AUX_IO: u8 = 0x08; // "Input / Output"
+const AUX_CD: u8 = 0x10; // "Command / Data"
+const AUX_MSG: u8 = 0x20; // "Message"
+const AUX_DF: u8 = 0x80; // Data register full
 
-const ID_VALID: u8 = 0b10000000;
-
-const AUX_CZ: u8 = 0b00000010;
-#[allow(dead_code)]
-const AUX_IO: u8 = 0b00001000;
-const AUX_CD: u8 = 0b00010000;
-#[allow(dead_code)]
-const AUX_MSG: u8 = 0b00100000;
-
-#[allow(dead_code)]
-const INT_FC: u8 = 0b00000001;
-#[allow(dead_code)]
-const INT_BUS_SVC: u8 = 0b00000010;
-#[allow(dead_code)]
-const INT_DIS: u8 = 0b00000100;
-#[allow(dead_code)]
-const INT_SELECTED: u8 = 0b00001000;
-
-//
-// MSG  C/D  I/O
-// -------------
-//  0    0    0      Data Out
-//  0    0    1      Data In
-//  0    1    0      Command
-//  0    1    1      Status
-//  1    0    0      [unused]
-//  1    0    1      [unused]
-//  1    1    0      Message Out
-//  1    1    1      Message In
-#[allow(dead_code)]
-const PHASE_DATO: u8 = 0b00000000;
-#[allow(dead_code)]
-const PHASE_DATI: u8 = 0b00001000;
-const PHASE_CMND: u8 = 0b00010000;
-#[allow(dead_code)]
-const PHASE_STAT: u8 = 0b00011000;
-#[allow(dead_code)]
-const PHASE_MSGO: u8 = 0b00110000;
-#[allow(dead_code)]
-const PHASE_MSGI: u8 = 0b00111000;
+/// Interrupt Flags
+const INT_FC: u8 = 0x01; // "Function Complete"
+const INT_BUS: u8 = 0x02; // "Bus Service"
 
 /// Register I/O Addresses
 #[derive(FromPrimitive)]
@@ -98,31 +68,15 @@ enum RegAddr {
     Xfer0 = 0x7be01c,
 }
 
-/// SCSI Bus Phase
-#[derive(FromPrimitive)]
-enum Phase {
-    DataOut = 0,
-    DataIn = 1,
-    Command = 2,
-    Status = 3,
-    MessageOut = 6,
-    MessageIn = 8,
-}
-
-/// Controller State
 #[allow(dead_code)]
-enum State {
-    BusFree,
-    // Arbitration is implied in BusFree -> Selected
-    Selected,
-    Command,
-    Data,
-    Message,
-    Status,
+enum ControllerState {
+    Disconnected,
+    Target,
+    Initiator,
 }
 
 /// SCSI BUS Commands
-#[derive(FromPrimitive)]
+#[derive(FromPrimitive, Debug)]
 enum Command {
     // Immediate Commands
     ChipReset = 0,
@@ -149,39 +103,36 @@ enum Command {
     TransferPad = 21,
 }
 
-/// SCSI Opcodes
-#[allow(dead_code)]
-#[derive(FromPrimitive)]
-enum Op {
-    TestReady = 0x00,
-    Rewind = 0x01,
-    RequestSense = 0x03,
-    ReadBlockLimits = 0x05,
-    Read6 = 0x08,
-    Write6 = 0x0a,
-    WriteFileMark = 0x10,
-    Space = 0x11,
-    Inquiry = 0x12,
-    ModeSelect6 = 0x15,
-    Reserve = 0x16,
-    Release = 0x17,
-    Erase = 0x19,
-    ModeSense6 = 0x1a,
-    StartStop = 0x1b,
-    SendDiag = 0x1d,
-    PreventAllow = 0x1e,
-    ReadCapacity = 0x25,
-    Read10 = 0x28,
-    Write10 = 0x2a,
-    ReadLong = 0x3e,
-    ModeSelect10 = 0x55,
-    ModeSense10 = 0x5a,
+#[derive(Copy, Clone, Debug)]
+enum ScsiDeviceState {
+    Unselected,
+    Selected,
+    Command,
+    DataOut,
 }
 
-#[allow(dead_code)]
+#[derive(Copy, Clone, Debug)]
+struct ScsiDevice {
+    state: ScsiDeviceState,
+}
+
+impl ScsiDevice {
+    fn reset(&mut self) {
+        self.state = ScsiDeviceState::Unselected
+    }
+}
+
+impl Default for ScsiDevice {
+    fn default() -> ScsiDevice {
+        ScsiDevice {
+            state: ScsiDeviceState::Unselected,
+        }
+    }
+}
+
 pub struct Scsi {
-    state: State,
-    address: usize,
+    address: u16,
+    address_msb: bool,
     data1: u8,
     command: u8,
     control: u8,
@@ -193,15 +144,18 @@ pub struct Scsi {
     data2: u8,
     diag_status: u8,
     xfer: u32,
-    cmd: [u8; CMD_SIZE],
     cmd_ptr: usize,
+    controller_state: ControllerState,
+    scsi_cmd: [u8; 16],
+    atn: bool,
+    devices: [ScsiDevice; 8],
 }
 
 impl Scsi {
     pub fn new() -> Self {
         Scsi {
-            state: State::BusFree,
             address: 0,
+            address_msb: false,
             data1: 0,
             command: 0,
             control: 0,
@@ -213,77 +167,93 @@ impl Scsi {
             data2: 0,
             diag_status: 0,
             xfer: 0,
-            cmd: [0; CMD_SIZE],
             cmd_ptr: 0,
+            scsi_cmd: [0; 16],
+            controller_state: ControllerState::Disconnected,
+            atn: false,
+            devices: [ScsiDevice::default(); 8],
         }
     }
 
-    /// Controller Reset
     fn reset(&mut self) {
-        info!("RESET");
+        info!("COMMAND RESET.");
 
+        self.address = 0;
+        self.address_msb = false;
         self.data1 = 0;
+        self.command = 0;
         self.control = 0;
         self.dest_id = 0;
-        self.aux_stat = AUX_CZ;
+        self.aux_stat = 0x02; // From datasheet
+        self.id = HOST_ID;
         self.interrupt = 0;
-        self.source_id = 0;
+        self.source_id = 0x07; // From datasheet
         self.data2 = 0;
-        self.diag_status = DIAG_COMPLETE;
+        self.diag_status = 0x80; // From datasheet
         self.xfer = 0;
         self.cmd_ptr = 0;
+        self.scsi_cmd.iter_mut().for_each(|d| *d = 0);
+        self.controller_state = ControllerState::Disconnected;
+        self.atn = false;
+
+        self.devices.iter_mut().for_each(|d| d.reset());
     }
 
-    /// Select (with or without attention)
-    // - Causes interrupt.
-    // - Success: INT_REGISTER = 0b00000001, AUX_STATUS = C/D
-    // - Failure: INT_REGISTER = 0b01000000, AUX_STATUS = C/D (I think?)
+    fn disconnect(&mut self) {
+        info!("COMMAND DISCONNECT. Probably ignoring.");
+    }
+
+    /// Select a target device
     fn select(&mut self, atn: bool) {
-        info!("SELECT (atn={}, timeout={})", atn, self.xfer);
+        info!("COMMAND SELECT. atn={}", atn);
+        self.controller_state = ControllerState::Initiator;
+        self.atn = atn;
 
-        self.state = State::Selected;
+        // Set the target to command
+        self.devices[(self.dest_id & 0x7) as usize].state = ScsiDeviceState::Selected;
 
-        self.aux_stat = AUX_CD;
         self.interrupt = INT_FC;
-        self.source_id = ID_VALID | self.dest_id;
-
-        schedule!(ServiceKey::Scsi, Duration::from_millis(750));
+        self.aux_stat = AUX_CD; // I/O=0, C/D=1, MSG=0 == Command
+        self.source_id = 0x80 | self.dest_id; // Bit 7 indicates valid ID
+                                              // from destination device
+        schedule!(ServiceKey::Scsi, Duration::from_millis(250));
+        set_irq(SCSI_INT);
     }
 
     fn transfer_info(&mut self) {
-        info!(
-            "(COMMAND) Transfer Info. XFER={} ({:x})",
-            self.xfer, self.xfer
-        );
+        info!("COMMAND TRANSFER INFO.");
         self.cmd_ptr = 0;
 
-        schedule!(ServiceKey::Scsi, Duration::from_millis(750));
+        schedule!(ServiceKey::Scsi, Duration::from_millis(100));
     }
 
     fn transfer_pad(&mut self) {
-        info!(
-            "(COMMAND) Transfer Pad. XFER={} ({:x})",
-            self.xfer, self.xfer
-        );
-        self.cmd_ptr = 0;
-
-        schedule!(ServiceKey::Scsi, Duration::from_millis(75));
+        info!("COMMAND TRANSFER PAD.");
     }
 
-    /// Process the last command.
-    fn handle_command(&mut self) {
-        let c = self.command & 0x1f;
+    fn handle_command(&mut self, command: u8) -> Result<(), BusError> {
+        let dma_mode = command & 0x80 == 0x80;
+        let sbt = command & 0x40 == 0x40;
 
-        match FromPrimitive::from_u8(c) {
-            Some(Command::ChipReset) => self.reset(),
-            Some(Command::SelectWithAtn) => self.select(true),
-            Some(Command::SelectWithoutAtn) => self.select(false),
-            Some(Command::TransferInfo) => self.transfer_info(),
-            Some(Command::TransferPad) => self.transfer_pad(),
-            _ => {
-                info!("Unhandled scsi command: 0x{:02x} (b{:06b})", c, c);
+        if let Some(cmd) = Command::from_u8(command & 0x1f) {
+            info!(
+                "Handle Command: DMA_MODE={}, SBT={}, CMD={:?}",
+                dma_mode, sbt, cmd
+            );
+            match cmd {
+                Command::ChipReset => self.reset(),
+                Command::Disconnect => self.disconnect(),
+                Command::SelectWithoutAtn => self.select(false),
+                Command::SelectWithAtn => self.select(true),
+                Command::TransferInfo => self.transfer_info(),
+                Command::TransferPad => self.transfer_pad(),
+                _ => info!("Command {:?} not yet handled.", cmd),
             }
-        }
+        } else {
+            info!("What kind of command is 0x{:02x} ???", command);
+        };
+
+        Ok(())
     }
 }
 
@@ -291,23 +261,24 @@ impl IoDevice for Scsi {
     fn read_8(&mut self, _bus: &mut Bus, address: usize) -> Result<u8, BusError> {
         match FromPrimitive::from_usize(address) {
             Some(RegAddr::Data1) => {
-                info!("(READ) DATA1={:02x}", self.data1);
+                info!("(READ) DATA1: 0x{:02x}", self.data1);
+                self.aux_stat &= !AUX_DF;
                 Ok(self.data1)
             }
             Some(RegAddr::Command) => {
-                info!("(READ) COMMAND={:02x}", self.command);
+                info!("(READ) COMMAND: 0x{:02x}", self.command);
                 Ok(self.command)
             }
             Some(RegAddr::Control) => {
-                info!("(READ) CONTROL={:02x}", self.control);
+                info!("(READ) CONTROL: 0x{:02x}", self.control);
                 Ok(self.control)
             }
             Some(RegAddr::DestId) => {
-                info!("(READ) DEST_ID={}", self.dest_id);
+                info!("(READ) DEST_ID: {}", self.dest_id);
                 Ok(self.dest_id)
             }
             Some(RegAddr::AuxStatus) => {
-                info!("(READ) AUX_STAT: {:02x}", self.aux_stat);
+                info!("(READ) AUX_STAT: 0x{:02x}", self.aux_stat);
                 Ok(self.aux_stat)
             }
             Some(RegAddr::Id) => {
@@ -315,25 +286,44 @@ impl IoDevice for Scsi {
                 Ok(self.id)
             }
             Some(RegAddr::Interrupt) => {
-                let irq = self.interrupt;
-                info!("(READ) INTERRUPT: ({:02x})", irq);
-                Ok(irq)
+                info!("(READ) INTERRUPT: 0x{:02x}", self.interrupt);
+                Ok(self.interrupt)
             }
             Some(RegAddr::SourceId) => {
                 info!("(READ) SOURCE_ID: {}", self.source_id);
                 Ok(self.source_id)
             }
             Some(RegAddr::Data2) => {
-                info!("(READ) DATA2: {:02x}", self.data2);
+                info!("(READ) DATA2: 0x{:02x}", self.data2);
                 Ok(self.data2)
             }
             Some(RegAddr::DiagStatus) => {
-                info!("(READ) DIAG_STATUS: {:02x}", self.diag_status);
+                info!("(READ) DIAG_STATUS: 0x{:02x}", self.diag_status);
                 Ok(self.diag_status)
             }
-            Some(RegAddr::Xfer2) => Ok((self.xfer >> 16) as u8),
-            Some(RegAddr::Xfer1) => Ok((self.xfer >> 8) as u8),
-            Some(RegAddr::Xfer0) => Ok(self.xfer as u8),
+            Some(RegAddr::Xfer2) => {
+                info!(
+                    "(READ) XFER2: 0x{:02x} (xfer=0x{:06x})",
+                    (self.xfer >> 16) as u8,
+                    self.xfer
+                );
+                Ok((self.xfer >> 16) as u8)
+            }
+            Some(RegAddr::Xfer1) => {
+                info!(
+                    "(READ) XFER1: 0x{:02x} (xfer=0x{:06x})",
+                    (self.xfer >> 8) as u8,
+                    self.xfer
+                );
+                Ok((self.xfer >> 8) as u8)
+            }
+            Some(RegAddr::Xfer0) => {
+                info!(
+                    "(READ) XFER1: 0x{:02x} (xfer=0x{:06x})",
+                    self.xfer as u8, self.xfer
+                );
+                Ok(self.xfer as u8)
+            }
             _ => {
                 info!("READ: Unhandled.");
                 Ok(0)
@@ -344,28 +334,39 @@ impl IoDevice for Scsi {
     fn write_8(&mut self, _bus: &mut Bus, address: usize, value: u8) -> Result<(), BusError> {
         match FromPrimitive::from_usize(address) {
             Some(RegAddr::Address) => {
-                info!("(WRITE) ADDRESS = {:02x}", value);
+                if self.address_msb {
+                    self.address &= 0x00ff;
+                    self.address |= (value as u16) << 8;
+                    self.address_msb = false;
+                } else {
+                    self.address &= 0xff00;
+                    self.address |= value as u16;
+                    self.address_msb = true;
+                }
+                // I believe writes to this are: LSB first, then MSB.
+                info!(
+                    "(WRITE) ADDRESS = {:02x} (address now is: {:04x})",
+                    value, self.address
+                );
             }
             Some(RegAddr::Data1) => {
                 info!("(WRITE)    CMD[{:02}] = {:02x}", self.cmd_ptr, value);
-                self.cmd[self.cmd_ptr] = value;
-                if self.cmd_ptr < CMD_SIZE {
-                    self.cmd_ptr += 1;
-                    if self.cmd_ptr == (self.xfer as usize) {
-                        info!(
-                            ">>> EXECUTING {} BYTE SCSI COMMAND: {:02x}",
-                            self.xfer, self.cmd[0]
-                        );
-                    }
-                }
+                self.scsi_cmd[self.cmd_ptr] = value;
+                self.cmd_ptr += 1;
             }
             Some(RegAddr::Command) => {
                 info!("(WRITE) COMMAND = {:02x}", value);
-                self.command = value;
-                self.handle_command();
+                self.cmd_ptr = 0;
+                return self.handle_command(value);
             }
             Some(RegAddr::Control) => {
-                info!("(WRITE) CONTROL = {:02x}", value);
+                let parity = value & 0x4 == 0x4;
+                let reselect = value & 0x2 == 0x2;
+                let select = value & 0x1 == 0x1;
+                info!(
+                    "(WRITE) CONTROL: Parity={}, Reselect={}, Select={}",
+                    parity, reselect, select
+                );
                 self.control = value;
             }
             Some(RegAddr::DestId) => {
@@ -374,22 +375,21 @@ impl IoDevice for Scsi {
             }
             Some(RegAddr::Id) => {
                 info!("(WRITE) ID = {:02x}", value);
-                self.id = value;
             }
             Some(RegAddr::Xfer2) => {
-                info!("(WRITE) XFER2 = {:02x}", value);
-                self.xfer &= !(0xff << 16);
+                self.xfer &= 0x00ffff;
                 self.xfer |= (value as u32) << 16;
+                info!("(WRITE) XFER2 = {:02x} (xfer={:06x})", value, self.xfer);
             }
             Some(RegAddr::Xfer1) => {
-                info!("(WRITE) XFER1 = {:02x}", value);
-                self.xfer &= !(0xff << 8);
+                self.xfer &= 0xff00ff;
                 self.xfer |= (value as u32) << 8;
+                info!("(WRITE) XFER1 = {:02x} (xfer={:06x})", value, self.xfer);
             }
             Some(RegAddr::Xfer0) => {
-                info!("(WRITE) XFER0 = {:02x}", value);
-                self.xfer &= !(0xff);
+                self.xfer &= 0xffff00;
                 self.xfer |= value as u32;
+                info!("(WRITE) XFER0 = {:02x} (xfer={:06x})", value, self.xfer);
             }
             _ => {
                 info!("(WRITE 8) addr={:08x} val={:02x}", address, value);
@@ -400,35 +400,69 @@ impl IoDevice for Scsi {
     }
 
     fn service(&mut self) {
-        match self.state {
-            State::BusFree => {
-                info!("[BUSFREE->SELECTED]");
-                self.state = State::Selected;
-                self.interrupt = INT_FC;
-                self.aux_stat = PHASE_CMND;
-                // Schedule again for next phase transition
-                schedule!(ServiceKey::Scsi, Duration::from_millis(750));
+        info!(
+            "Servicing SCSI Controller. Current Target ID={}",
+            self.dest_id
+        );
+
+        let id = (self.dest_id & 0x7) as usize;
+        let cur_state = self.devices[id].state;
+
+        match cur_state {
+            ScsiDeviceState::Selected => {
+                info!("[service] Selected -> Command (dest_id={})", self.dest_id);
+
+                self.interrupt = INT_BUS;
+                self.aux_stat = AUX_CD; // "COMMAND" phase, initiator to target
+
+                self.devices[id].state = ScsiDeviceState::Command;
                 set_irq(SCSI_INT);
             }
-            // A target has been selected and we are an initiator.
-            State::Selected => {
-                // This will vary depending on what the selected target
-                // device is. For now, we're pretending that ID 0 is a
-                // hard disk device.
-                info!("[SELECTED->COMMAND]");
-                self.state = State::Command;
-                self.interrupt = INT_BUS_SVC;
-                self.aux_stat = PHASE_CMND;
+            ScsiDeviceState::Command => {
+                info!("[service] Command -> Data Out (dest_id={})", self.dest_id);
+                info!("[service]  ... cmd_ptr={}", self.cmd_ptr);
+                info!(
+                    "[service]  ... cmd={:02x} {:02x} {:02x} {:02x} {:02x} {:02x}",
+                    self.scsi_cmd[0],
+                    self.scsi_cmd[1],
+                    self.scsi_cmd[2],
+                    self.scsi_cmd[3],
+                    self.scsi_cmd[4],
+                    self.scsi_cmd[5],
+                );
+
+                self.data1 = 0;
+
+                self.interrupt = INT_BUS | INT_FC;
+
+                if self.aux_stat & (AUX_MSG | AUX_CD | AUX_IO) == (AUX_CD | AUX_IO) {
+                    // STATUS -> DATA_IN
+                    info!(">>> aux_stat == {:02x}, Switching to AUX_IO", self.aux_stat);
+                    self.aux_stat = AUX_DF | AUX_IO;
+                } else {
+                    // DATA_IN -> STATUS
+                    info!(
+                        ">>> aux_stat == {:02x}, Switching to AUX_DF | AUX_CD | AUX_IO",
+                        self.aux_stat
+                    );
+                    self.aux_stat = AUX_DF | AUX_CD | AUX_IO;
+                }
+
                 set_irq(SCSI_INT);
             }
-            State::Command => {
-                info!("[COMMAND->DATI]");
-                self.state = State::Data;
-                self.interrupt = INT_BUS_SVC;
-                self.aux_stat = PHASE_DATO;
-                set_irq(SCSI_INT);
+            ScsiDeviceState::DataOut => {
+                info!("[service] Data Out (dest_id={})", self.dest_id);
+
+                self.interrupt = INT_BUS | INT_FC;
+                info!(">>> UHHHH WHAT");
+                self.aux_stat = AUX_DF;
             }
-            _ => info!("[???->???]"),
+            _ => {
+                info!(
+                    "[service] Unhandled State: {:?} (dest_id={})",
+                    cur_state, self.dest_id
+                );
+            }
         }
     }
 }
